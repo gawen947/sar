@@ -1,5 +1,5 @@
 /* File: write_test.c
-   Time-stamp: <2011-07-13 23:47:43 gawen>
+   Time-stamp: <2011-07-14 13:17:22 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.

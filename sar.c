@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-13 23:57:53 gawen>
+   Time-stamp: <2011-07-14 14:41:50 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -55,6 +55,8 @@ static void rec_add(struct sar_file *out, const char *node);
 static void write_regular(struct sar_file *out, const struct stat *buf);
 static void write_link(struct sar_file *out, const struct stat *buf);
 static void write_dev(struct sar_file *out, const struct stat *buf);
+static void write_control(struct sar_file *out, uint16_t id);
+static void clean_hardlinks(struct sar_file *out);
 static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
                                 nlink_t links);
 
@@ -87,10 +89,13 @@ struct sar_file * sar_creat(const char *path,
 #endif /* TIME_WIDTH_CHECK */
 
   if(!path)
+    out->fd = STDOUT_FILENO;
+  else {
     out->fd = open(path, O_CREAT | O_RDWR | O_TRUNC,
                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
-  else
-    out->fd = STDOUT_FILENO;
+    if(out->fd < 0)
+      err(EXIT_FAILURE, "could not open file \"%s\"", path);
+  }
 
   /* write magik number and flags */
   xwrite(out->fd, &magik, sizeof(magik));
@@ -119,54 +124,62 @@ void sar_add(struct sar_file *out, const char *path)
   assert(!out->wp);
   assert(path);
 
-  char *s;
+  char *s, *npath;
 
   /* create hard link table */
   out->hl_tbl    = xmalloc(HL_TBL_SZ * sizeof(struct sar_hardlink));
   out->hl_tbl_sz = HL_TBL_SZ;
+  clean_hardlinks(out);
 
   /* now we may create the working path
      this is the one we will use in the future */
   out->wp     = xmalloc(WP_MAX);
   out->wp_idx = n_strncpy(out->wp, path, WP_MAX);
+  npath       = out->wp;
 
   if(out->wp_idx >= WP_MAX)
     errx(EXIT_FAILURE, "path too long");
 
   /* avoid root slash */
-  if(*path == '/')
-    path++;
+  if(*npath == '/')
+    npath++;
 
 NEXT_NODE:
-  s = out->wp;
+  s = npath;
 
-  if(*s == '/') {
-    const char *node;
+  for(;; s++) {
+    if(*s == '/') {
+      const char *node;
 
-    *s = '\0';
+      *s = '\0';
 
-    node = strdup(out->wp);
+      node = strdup(npath);
 
-    if(*(s + 1) == '\0') {
+      if(*(s + 1) == '\0') {
+        rec_add(out, node);
+        write_control(out, M_C_CHILD);
+
+        goto CLEAN;
+      }
+
+      add_node(out, NULL, node);
+      write_control(out, M_C_CHILD);
+
+
+      *s = '/';
+
+      npath = ++s;
+
+      goto NEXT_NODE;
+    }
+    else if(*s == '\0') {
+      const char *node = strdup(npath);
+
       rec_add(out, node);
+      write_control(out, M_C_CHILD);
 
       goto CLEAN;
     }
-
-    add_node(out, NULL, node);
-
-    *s = '/';
-
-    out->wp = ++s;
-
-    goto NEXT_NODE;
-  }
-  else if(*s == '\0') {
-    const char *node = strdup(out->wp);
-
-    rec_add(out, node);
-
-    goto CLEAN;
   }
 
 CLEAN:
@@ -185,11 +198,19 @@ static void crc_write(struct sar_file *out, const void *buf, size_t count)
   xwrite(out->fd, buf, count);
 }
 
+static void clean_hardlinks(struct sar_file *out)
+{
+  size_t i;
+
+  for(i = 0 ; i < out->hl_tbl_sz ; i++)
+    out->hl_tbl[i].path = NULL;
+}
+
 static void free_hardlinks(struct sar_file *out)
 {
   size_t i;
 
-  for(i = 0 ; i <= out->hl_tbl_sz ; i++)
+  for(i = 0 ; i < out->hl_tbl_sz ; i++)
     if(out->hl_tbl[i].path)
       free(out->hl_tbl[i].path);
 }
@@ -275,6 +296,13 @@ static void write_dev(struct sar_file *out, const struct stat *buf)
   crc_write(out, &dev, sizeof(dev));
 }
 
+static void write_control(struct sar_file *out, uint16_t id)
+{
+  uint16_t control = M_ICTRL | id;
+
+  xwrite(out->fd, &control, sizeof(control));
+}
+
 static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 {
   assert(out);
@@ -304,7 +332,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   }
 
   /* watch for hard link */
-  if(buf.st_nlink >= 2) {
+  if(buf.st_nlink >= 2 && !S_ISDIR(buf.st_mode)) {
     const char *link = watch_inode(out, buf.st_ino, buf.st_dev, buf.st_nlink);
 
     if(link) {
@@ -416,7 +444,6 @@ static void rec_add(struct sar_file *out, const char *node)
   assert(out->wp);
 
   mode_t mode;
-  uint16_t control = M_ICTRL | M_C_CHILD;
 
   if(add_node(out, &mode, node) < 0)
     return;
@@ -463,6 +490,30 @@ static void rec_add(struct sar_file *out, const char *node)
     closedir(dp);
 
     /* append control information */
-    xwrite(out->fd, &control, sizeof(control));
+    write_control(out, M_C_CHILD);
   }
 }
+
+/* open an archive for reading */
+struct sar_file * sar_read(const char *path)
+{
+  uint32_t magik;
+
+  struct sar_file *out = xmalloc(sizeof(struct sar_file));
+
+  if(!path)
+    out->fd = STDIN_FILENO;
+  else {
+    out->fd = open(path, O_RDONLY);
+
+    if(out->fd < 0)
+      err(EXIT_FAILURE, "could not open file \"%s\"", path);
+  }
+
+  xxread(out->fd, &magik, sizeof(magik));
+
+  if(magik != MAGIK)
+    errx(EXIT_FAILURE, "incompatible magik number");
+  
+}
+

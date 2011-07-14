@@ -54,6 +54,7 @@ void * xmalloc(size_t size);
 void * xrealloc(void *ptr, size_t size);
 ssize_t xwrite(int fd, const void *buf, size_t count);
 ssize_t xread(int fd, void *buf, size_t count);
+ssize_t xxread(int fd, void *buf, size_t count);
 int xstat(const char *path, struct stat *buf);
 int xchown(const char *path, uid_t owner, gid_t group);
 char * xreadlink_malloc_n(const char *filename, ssize_t *n);
