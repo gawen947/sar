@@ -149,9 +149,10 @@ struct sar_hardlink {
 #define A_HAS_CRC(a)    A_HAS(a, CRC)
 
 /* default and max sizes */
-enum max     { WP_MAX = PATH_MAX };
+enum max     { WP_MAX = 4095,
+               NODE_MAX = 255 };
 enum size    { HL_TBL_SZ = 1024,
-               IO_SZ     = 32768 };
+               IO_SZ     = 65536 };
 
 struct sar_file * sar_creat(const char *path,
                             bool use_32id,

@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-14 18:13:53 gawen>
+   Time-stamp: <2011-07-14 20:08:52 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -133,6 +133,7 @@ void sar_add(struct sar_file *out, const char *path)
   assert(path);
 
   char *s, *npath;
+  size_t nb_nodes = 0;
 
   /* create hard link table */
   out->hl_tbl    = xmalloc(HL_TBL_SZ * sizeof(struct sar_hardlink));
@@ -153,6 +154,7 @@ void sar_add(struct sar_file *out, const char *path)
     npath++;
 
 NEXT_NODE:
+  nb_nodes++;
   s = npath;
 
   for(;; s++) {
@@ -163,16 +165,13 @@ NEXT_NODE:
 
       node = strdup(npath);
 
-      if(*(s + 1) == '\0') {
+      if(*(s + 1) == '\0')  {
         rec_add(out, node);
-        write_control(out, M_C_CHILD);
 
         goto CLEAN;
       }
 
       add_node(out, NULL, node);
-      write_control(out, M_C_CHILD);
-
 
       *s = '/';
 
@@ -184,13 +183,15 @@ NEXT_NODE:
       const char *node = strdup(npath);
 
       rec_add(out, node);
-      write_control(out, M_C_CHILD);
 
       goto CLEAN;
     }
   }
 
 CLEAN:
+  while(nb_nodes--)
+    write_control(out, M_C_CHILD);
+
   free_hardlinks(out);
   free(out->hl_tbl);
   free(out->wp);
@@ -303,7 +304,8 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
 static void write_link(struct sar_file *out, const struct stat *buf)
 {
   ssize_t n;
-  uint16_t size;
+  size_t size;
+  uint8_t t_size;
   const char *ln = xreadlink_malloc_n(out->wp, &n);
 
   if(!ln)
@@ -337,6 +339,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 
   struct stat buf;
   size_t size;
+  uint8_t t_size;
   uint16_t mode;
 
 #ifndef DISABLE_PERMISSION_CHECK
@@ -362,10 +365,13 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
     const char *link = watch_inode(out, buf.st_ino, buf.st_dev, buf.st_nlink);
 
     if(link) {
+      uint16_t size = strlen(link);
+
       mode = M_IHARD;
 
       crc_write(out, &mode, sizeof(mode));
-      crc_write(out, link, strlen(link));
+      crc_write(out, &size, sizeof(size));
+      crc_write(out, link, size);
 
       goto CRC;
     }
@@ -422,20 +428,26 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   /* check for large node name */
   if(size > NAME_MAX) {
     char *short_name = strndup(name, NAME_MAX);
-    size = NAME_MAX;
+    t_size = size = NAME_MAX;
 
     short_name[NAME_MAX - 1] = '~';
     short_name[NAME_MAX]     = '\0';
 
+    crc_write(out, &t_size, sizeof(t_size));
     crc_write(out, short_name, size);
 
     warnx("name too long for \"%s\" reduced to \"%s\"", out->wp, short_name);
 
     free(short_name);
   }
-  else
+  else {
+    t_size = size;
+    crc_write(out, &t_size, sizeof(t_size));
     crc_write(out, name, size);
+  }
 #else
+  t_size = size;
+  crc_write(out, &t_size, sizeof(t_size));
   crc_write(out, name, size);
 #endif /* NAME_WIDTH_CHECK */
 
@@ -570,19 +582,15 @@ static void read_regular(struct sar_file *out, mode_t mode)
   /* endianess conversion for size should be done here */
 
   /* read file */
-  while(size <= 0) {
-    size_t n = xread(out->fd, iobuf, MAX(size,IO_SIZE));
+  while(size > 0) {
+    size_t n = MIN(size, IO_SIZE);
 
-    if(!n)
-      errx(EXIT_FAILURE, "inconsistent archive");
-
-    /* compute crc */
-    out->crc = crc32(iobuf, out->crc, n);
+    xcrc_read(out, iobuf, n);
 
     /* copy buffer */
     xwrite(fd, iobuf, n);
 
-    size -= IO_SIZE;
+    size -= n;
   }
 
   if(size < 0)
@@ -607,10 +615,7 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   /* endianess conversion should be done here for size */
 
-  xxread(out->fd, path, size);
-
-  /* compute crc */
-  out->crc = crc32(path, out->crc, size);
+  xcrc_read(out, path, size);
 
   if(symlink(out->wp, path) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
@@ -637,10 +642,14 @@ static void read_device(struct sar_file *out, mode_t mode)
 static void read_hardlink(struct sar_file *out, mode_t mode)
 {
   char path[WP_MAX];
+  uint16_t size;
 
-  xread(out->fd, path, WP_MAX);
+  /* read link length */
+  xcrc_read(out, &size, sizeof(size));
 
-  out->crc = crc32(path, out->crc, strlen(path));
+  /* endianess conversion should be done here for size */
+
+  xcrc_read(out, path, size);
 
   if(link(path, out->wp) < 0)
     warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
@@ -652,7 +661,7 @@ static int rec_extract(struct sar_file *out, size_t idx)
   assert(out->fd);
   assert(out->wp);
 
-  char name[NAME_MAX];
+  char name[NODE_MAX];
   struct utimbuf times;
   time_t atime;
   time_t mtime;
@@ -660,7 +669,7 @@ static int rec_extract(struct sar_file *out, size_t idx)
   gid_t gid;
   mode_t real_mode;
   uint16_t mode;
-  size_t n, i;
+  uint8_t size, i;
 
   /* setup crc and we don't care if we won't compute it or not */
   out->crc = 0;
@@ -735,22 +744,18 @@ static int rec_extract(struct sar_file *out, size_t idx)
 
 EXTRACT_NAME:
   /* extract name */
-  xread(out->fd, name, NAME_MAX);
-
-  /* compute crc */
-  n = strlen(name);
-  out->crc = crc32(name, out->crc, n);
+  xcrc_read(out, &size, sizeof(size));
+  xcrc_read(out, name, size);
 
 #ifndef DISABLE_WP_WIDTH_CHECK
-  if(idx + n >= WP_MAX)
+  if(idx + size >= WP_MAX)
     errx(EXIT_FAILURE, "maximum size exceeded for working path");
 #endif /* WP_WIDTH_CHECK */
 
   /* copy name to working path */
-  out->wp[idx] = '/';
-  for(i = 0 ; i < n ; i++)
-    out->wp[1 + idx + i] = name[i];
-  out->wp[1 + idx + i] = '\0';
+  for(i = 0 ; i < size ; i++)
+    out->wp[idx + i] = name[i];
+  out->wp[idx + size] = '\0';
 
   /* endianess conversion should be done here */
   real_mode = uint162mode(mode);
@@ -793,9 +798,14 @@ CRC:
       warnx("corrupted file \"%s\"", out->wp);
   }
 
-  if(mode & M_IFMT == M_IDIR)
+  if((mode & M_IFMT) == M_IDIR) {
+    out->wp[idx + size]     = '/';
+    out->wp[idx + size + 1] = '\0';
     /* read until we receive a child control stamp */
-    while(rec_extract(out, 1 + idx + n) != 1);
+    while(rec_extract(out, idx + size + 1) != 1);
+
+    out->wp[idx + size] = '\0';
+  }
 
   return 0;
 }
@@ -814,4 +824,5 @@ void sar_extract(struct sar_file *out)
   while(rec_extract(out, 0) != 1);
 
   free(out->wp);
+  UNPTR(out->wp);
 }
