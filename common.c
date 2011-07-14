@@ -109,7 +109,7 @@ size_t n_strncpy(char *dest, const char *src, size_t n)
 ssize_t xxread(int fd, void *buf, size_t count)
 {
   ssize_t n = read(fd, buf, count);
-  if(n < 0 || n != count)
+  if(n != count)
     err(EXIT_FAILURE, "IO read error or inconsistent archive");
   return n;
 }

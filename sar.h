@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-13 23:49:44 gawen>
+   Time-stamp: <2011-07-14 17:57:12 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -157,7 +157,9 @@ struct sar_file * sar_creat(const char *path,
                             bool use_32id,
                             bool use_64time,
                             bool use_crc);
+struct sar_file * sar_read(const char *path);
 void sar_add(struct sar_file *out, const char *path);
+void sar_extract(struct sar_file *out);
 void sar_close(struct sar_file *file);
 
 #endif /* _SAR_H_ */

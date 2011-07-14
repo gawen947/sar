@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-14 14:41:50 gawen>
+   Time-stamp: <2011-07-14 17:53:22 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -49,17 +49,25 @@
 #include "sar.h"
 
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
+static ssize_t crc_read(struct sar_file *out, void *buf, size_t count);
+static void xcrc_read(struct sar_file *out, void *buf, size_t count);
 static void free_hardlinks(struct sar_file *out);
 static int add_node(struct sar_file *out, mode_t *mode, const char *name);
 static void rec_add(struct sar_file *out, const char *node);
+static int rec_extract(struct sar_file *out, size_t idx);
 static void write_regular(struct sar_file *out, const struct stat *buf);
 static void write_link(struct sar_file *out, const struct stat *buf);
 static void write_dev(struct sar_file *out, const struct stat *buf);
 static void write_control(struct sar_file *out, uint16_t id);
+static void read_regular(struct sar_file *out, mode_t mode);
+static void read_dir(struct sar_file *out, mode_t mode);
+static void read_link(struct sar_file *out, mode_t mode);
+static void read_fifo(struct sar_file *out, mode_t mode);
+static void read_device(struct sar_file *out, mode_t mode);
+static void read_hardlink(struct sar_file *out, mode_t mode);
 static void clean_hardlinks(struct sar_file *out);
 static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
                                 nlink_t links);
-
 
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
@@ -198,6 +206,24 @@ static void crc_write(struct sar_file *out, const void *buf, size_t count)
   xwrite(out->fd, buf, count);
 }
 
+static ssize_t crc_read(struct sar_file *out, void *buf, size_t count)
+{
+  ssize_t n = xread(out->fd, buf, count);
+
+  if(A_HAS_CRC(out))
+    out->crc = crc32(buf, out->crc, n);
+
+  return n;
+}
+
+static void xcrc_read(struct sar_file *out, void *buf, size_t count)
+{
+  xxread(out->fd, buf, count);
+
+  if(A_HAS_CRC(out))
+    out->crc = crc32(buf, out->crc, count);
+}
+
 static void clean_hardlinks(struct sar_file *out)
 {
   size_t i;
@@ -277,7 +303,7 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
 static void write_link(struct sar_file *out, const struct stat *buf)
 {
   ssize_t n;
-  uint32_t size;
+  uint16_t size;
   const char *ln = xreadlink_malloc_n(out->wp, &n);
 
   if(!ln)
@@ -510,10 +536,285 @@ struct sar_file * sar_read(const char *path)
       err(EXIT_FAILURE, "could not open file \"%s\"", path);
   }
 
+  /* check magik number */
   xxread(out->fd, &magik, sizeof(magik));
 
   if(magik != MAGIK)
     errx(EXIT_FAILURE, "incompatible magik number");
-  
+
+  out->version = magik & MAGIK_FORMAT_VERSION;
+
+  /* extract flags */
+  xxread(out->fd, &out->flags, sizeof(out->flags));
+
+  /* for debugging purpose */
+  UNPTR(out->wp);
+  UNPTR(out->hl_tbl);
+
+  return out;
 }
 
+static void read_regular(struct sar_file *out, mode_t mode)
+{
+  char iobuf[IO_SIZE];
+  uint64_t size;
+
+  /* open output file */
+  int fd = open(out->wp, O_CREAT | O_RDWR | O_TRUNC, mode);
+  if(fd < 0)
+    err(EXIT_FAILURE, "could not open output file \"%s\"", out->wp);
+
+  /* read file size */
+  xcrc_read(out, &size, sizeof(size));
+
+  /* endianess conversion for size should be done here */
+
+  /* read file */
+  while(size <= 0) {
+    size_t n = xread(out->fd, iobuf, MAX(size,IO_SIZE));
+
+    if(!n)
+      errx(EXIT_FAILURE, "inconsistent archive");
+
+    /* compute crc */
+    out->crc = crc32(iobuf, out->crc, n);
+
+    /* copy buffer */
+    xwrite(fd, iobuf, n);
+
+    size -= IO_SIZE;
+  }
+
+  if(size < 0)
+    errx(EXIT_FAILURE, "inconsistent archive");
+
+  close(fd);
+}
+
+static void read_dir(struct sar_file *out, mode_t mode)
+{
+  if(mkdir(out->wp, mode) < 0)
+    warn("cannot create directory \"%s\"", out->wp);
+}
+
+static void read_link(struct sar_file *out, mode_t mode)
+{
+  char path[WP_MAX];
+  uint16_t size;
+
+  /* read link length */
+  xcrc_read(out, &size, sizeof(size));
+
+  /* endianess conversion should be done here for size */
+
+  xxread(out->fd, path, size);
+
+  /* compute crc */
+  out->crc = crc32(path, out->crc, n);
+
+  if(symlink(out->wp, path) < 0)
+    warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
+}
+
+static void read_fifo(struct sar_file *out, mode_t mode)
+{
+  if(mkfifo(out->wp, mode) < 0)
+    warn("cannot create fifo \"%s\"", out->wp);
+}
+
+static void read_device(struct sar_file *out, mode_t mode)
+{
+  uint64_t dev;
+
+  xcrc_read(out, &dev, sizeof(dev));
+
+  /* endianess conversion should be done here for dev */
+
+  if(mknod(out->wp, mode, dev) < 0)
+    err(EXIT_FAILURE, "cannot create device \"%s\"", out->wp);
+}
+
+static void read_hardlink(struct sar_file *out, mode_t mode)
+{
+  char path[WP_MAX];
+
+  xread(out->fd, path, WP_MAX);
+
+  out->crc = crc32(path, out->crc, strlen(path));
+
+  if(link(path, out->wp) < 0)
+    warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
+}
+
+static int rec_extract(struct file *out, size_t idx)
+{
+  assert(out);
+  assert(out->fd);
+  assert(out->wp);
+
+  char name[NAME_MAX];
+  struct utimbuf times;
+  time_t atime;
+  time_t mtime;
+  uid_t uid;
+  gid_t gid;
+  mode_t real_mode;
+  uint16_t mode;
+  size_t n, i;
+
+  /* setup crc and we don't care if we won't compute it or not */
+  out->crc = 0;
+
+  xcrc_read(out, &mode, sizeof(mode));
+
+  switch(mode & M_IFMT) {
+  case(M_IHARD):
+    goto APPEND_NAME;
+
+    goto CRC;
+  case(M_ICTRL):
+    switch(mode) {
+    case(M_ICTRL | M_C_CHILD):
+      out->wp[idx] = '\0';
+      return 1;
+    case(M_ICTRL | M_C_IGNORE):
+      warnx("ignored \"%s\", not extracted", out->wp);
+      break;
+    }
+    break;
+  }
+
+  /* read file attribues and extended information */
+  if(A_HAS_32ID(out)) {
+    uint32_t t_uid;
+    uint32_t t_gid;
+
+    xcrc_read(out, &t_uid, sizeof(t_uid));
+    xcrc_read(out, &t_gid, sizeof(t_gid));
+
+    /* endianess conversion should be done here */
+
+    uid = t_uid;
+    gid = t_gid;
+  }
+  else {
+    uint16_t t_uid;
+    uint16_t t_gid;
+
+    xcrc_read(out, &t_uid, sizeof(t_uid));
+    xcrc_read(out, &t_gid, sizeof(t_gid));
+
+    /* endianess conversion should be done here */
+
+    uid = t_uid;
+    gid = t_gid;
+  }
+
+  if(A_HAS_64TIME(out)) {
+    int64_t t_atime;
+    int64_t t_mtime;
+
+    xcrc_read(out, &t_atime, sizeof(t_atime));
+    xcrc_read(out, &t_mtime, sizeof(t_mtime));
+
+    /* endianess conversion should be done here */
+
+    atime = t_atime;
+    mtime = t_mtime;
+  }
+  else {
+    int32_t t_atime;
+    int32_t t_mtime;
+
+    xcrc_read(out, &t_atime, sizeof(t_atime));
+    xcrc_read(out, &t_mtime, sizeof(t_mtime));
+
+    /* endianess conversion should be done here */
+
+    atime = t_atime;
+    mtime = t_mtime;
+  }
+
+  /* extract name */
+  xread(out, name, NAME_MAX);
+
+  /* compute crc */
+  n = strlen(name);
+  out->crc = crc32(name, out->crc, n);
+
+#ifndef DISABLE_WP_WIDTH_CHECK
+  if(idx + n >= WP_MAX)
+    errx(EXIT_FAILURE, "maximum size exceeded for working path");
+#endif /* WP_WIDTH_CHECK */
+
+  /* copy name to working path */
+  out->wp[idx] = '/';
+  for(i = 0 ; i < n ; i++)
+    out->wp[1 + idx + i] = name[i];
+  out->wp[1 + idx + i] = '\0';
+
+  /* endianess conversion should be done here */
+  real_mode = uint162mode(mode);
+
+  switch(mode & M_IFMT) {
+  case(M_IREG):
+    read_regular(out, real_mode);
+    break;
+  case(M_IDIR):
+    read_dir(out, real_mode);
+
+
+    break;
+  case(M_ILNK):
+    read_link(out, real_mode);
+    break;
+  case(M_IHARD):
+    read_hardlink(out, real_mode);
+    break;
+  case(M_IFIFO):
+    read_fifo(out, real_mode);
+    break;
+  case(M_IBLK):
+  case(M_ICHR):
+    read_device(out, real_mode);
+    break;
+  }
+
+  /* change attributes */
+  times.actime  = atime;
+  times.modtime = mtime;
+
+  xchown(out->wp, uid, gid);
+  xutime(out->wp, &times);
+
+CRC:
+  if(A_HAS_CRC(out)) {
+    uint32_t crc;
+    xxread(out->fd, &crc, sizeof(crc));
+
+    if(crc != out->crc)
+      warnx("corrupted file \"%s\"", out->wp);
+  }
+
+  if(mode & M_IFMT == M_IDIR)
+    /* read until we receive a child control stamp */
+    while(rec_extract(out, 1 + idx + n) != 1);
+
+  return 0;
+}
+
+void sar_extract(struct sar_file *out)
+{
+  assert(out);
+  assert(out->fd);
+  assert(!out->wp);
+
+  /* create the working path
+     this is the one we will use in the future */
+  out->wp     = xmalloc(WP_MAX);
+
+  /* read until we receive a child control stamp */
+  while(rec_extract(out, 0) != 1);
+
+  free(out->wp);
+}
