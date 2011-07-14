@@ -70,26 +70,6 @@ struct sar_file {
   uint32_t crc;    /* current crc */
 };
 
-struct sar_node {
-  /* every node */
-  uint16_t mode;    /* filetype and permissions */
-  uint32_t uid;     /* user id */
-  uint32_t gid;     /* group id */
-  int64_t atime;   /* access time */
-  int64_t mtime;   /* modification time */
-  uint32_t crc;     /* checksum */
-  const char *name; /* node name */
-
-  /* regular file */
-  uint64_t size;    /* file size */
-
-  /* symlink, hardlink */
-  const char *path; /* link path */
-
-  /* device */
-  uint32_t dev;     /* device (minor/major) */
-};
-
 struct sar_hardlink {
   ino_t inode;      /* inode number */
   dev_t device;     /* device id */
