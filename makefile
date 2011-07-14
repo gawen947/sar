@@ -1,0 +1,57 @@
+include commands.mk
+
+OPTS    := -O2
+CFLAGS  := -std=c99 $(OPTS) -fPIC -Wall
+LDFLAGS :=
+
+SRC  = $(wildcard *.c)
+OBJ  = $(foreach obj, $(SRC:.c=.o), $(notdir $(obj)))
+DEP  = $(SRC:.c=.d)
+
+PREFIX  ?= /usr/local
+BIN     ?= /bin
+
+SAR_VERSION := $(shell cat VERSION)
+CFLAGS += -DVERSION="\"$(SAR_VERSION)\""
+
+ifndef DISABLE_DEBUG
+CFLAGS += -ggdb
+else
+CFLAGS += -DNDEBUG=1
+endif
+
+commit = $(shell ./hash.sh)
+ifneq ($(commit), UNKNOWN)
+CFLAGS += -DCOMMIT="\"$(commit)\""
+CFLAGS += -DPARTIAL_COMMIT="\"$(shell echo $(commit) | cut -c1-8)\""
+endif
+
+ifneq "$(wildcard config.h)" ""
+CFLAGS += -DHAVE_CONFIG=1
+endif
+
+.PHONY: all clean
+
+all: sar
+
+sar: $(OBJ)
+	$(CC) -shared -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) -Wp,-MMD,$*.d -c $(CFLAGS) -o $@ $<
+
+clean:
+	$(RM) $(DEP)
+	$(RM) $(OBJ)
+	$(RM) $(CATALOGS)
+	$(RM) sar
+
+install:
+	$(MKDIR) -p $(DESTDIR)/$(PREFIXDIR)/$(BINDIR)
+	$(INSTALL_PROGRAM) sar $(DESTDIR)/$(PREFIX)/$(BINDIR)
+
+uninstall:
+	$(RM) $(DESTDIR)/$(PREFIX)/sar
+
+-include $(DEP)
+

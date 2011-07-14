@@ -37,7 +37,7 @@
 
 int main(int argc, const char *argv[])
 {
-  struct sar_file *out = sar_creat("test.sar", false, false, false);
+  struct sar_file *out = sar_creat("test.sar", false, false, true);
 
   sar_add(out, strdup(argv[1]));
   sar_close(out);
