@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-14 20:08:52 gawen>
+   Time-stamp: <2011-07-14 20:48:00 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -49,7 +49,6 @@
 #include "sar.h"
 
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
-static ssize_t crc_read(struct sar_file *out, void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
 static void free_hardlinks(struct sar_file *out);
 static int add_node(struct sar_file *out, mode_t *mode, const char *name);
@@ -207,16 +206,6 @@ static void crc_write(struct sar_file *out, const void *buf, size_t count)
   xwrite(out->fd, buf, count);
 }
 
-static ssize_t crc_read(struct sar_file *out, void *buf, size_t count)
-{
-  ssize_t n = xread(out->fd, buf, count);
-
-  if(A_HAS_CRC(out))
-    out->crc = crc32(buf, out->crc, n);
-
-  return n;
-}
-
 static void xcrc_read(struct sar_file *out, void *buf, size_t count)
 {
   xxread(out->fd, buf, count);
@@ -280,6 +269,8 @@ static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
   out->hl_tbl[null_idx].device = device;
   out->hl_tbl[null_idx].links  = links;
   out->hl_tbl[null_idx].path   = strdup(out->wp);
+
+  return NULL;
 }
 
 static void write_regular(struct sar_file *out, const struct stat *buf)
@@ -295,7 +286,7 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
   /* size of the file first */
   crc_write(out, &size, sizeof(size));
 
-  while(n = xread(fd, iobuf, IO_SZ))
+  while((n = xread(fd, iobuf, IO_SZ)))
     crc_write(out, iobuf, n);
 
   close(fd);
@@ -304,8 +295,7 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
 static void write_link(struct sar_file *out, const struct stat *buf)
 {
   ssize_t n;
-  size_t size;
-  uint8_t t_size;
+  uint8_t size;
   const char *ln = xreadlink_malloc_n(out->wp, &n);
 
   if(!ln)
@@ -502,8 +492,7 @@ static void rec_add(struct sar_file *out, const char *node)
       out->wp     = xrealloc(out->wp, out->wp_sz);
     }
 
-    while(e = readdir(dp)) {
-      size_t i;
+    while((e = readdir(dp))) {
       const char *s;
 
       /* skip special entity name */
@@ -663,10 +652,10 @@ static int rec_extract(struct sar_file *out, size_t idx)
 
   char name[NODE_MAX];
   struct utimbuf times;
-  time_t atime;
-  time_t mtime;
-  uid_t uid;
-  gid_t gid;
+  time_t atime = 0;
+  time_t mtime = 0;
+  uid_t uid = 0;
+  gid_t gid = 0;
   mode_t real_mode;
   uint16_t mode;
   uint8_t size, i;
@@ -789,7 +778,7 @@ EXTRACT_NAME:
   chown(out->wp, uid, gid);
   utime(out->wp, &times);
 
-CRC:
+  /* compute crc */
   if(A_HAS_CRC(out)) {
     uint32_t crc;
     xxread(out->fd, &crc, sizeof(crc));
@@ -798,6 +787,7 @@ CRC:
       warnx("corrupted file \"%s\"", out->wp);
   }
 
+  /* check for directory and extracts children */
   if((mode & M_IFMT) == M_IDIR) {
     out->wp[idx + size]     = '/';
     out->wp[idx + size + 1] = '\0';

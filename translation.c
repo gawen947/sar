@@ -66,7 +66,7 @@ uint16_t mode2uint16(mode_t mode)
     /* other files type are simply ignored
        this is the case for sockets */
     sar_mode = M_ICTRL | M_C_IGNORE;
-    return;
+    return sar_mode;
   }
 
   /* set UID/GID, sticky bit */

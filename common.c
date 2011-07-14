@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-07-14 14:38:25 gawen>
+   Time-stamp: <2011-07-14 20:43:05 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <assert.h>
+#include <string.h>
 #include <utime.h>
 #include <err.h>
 
@@ -112,4 +113,11 @@ ssize_t xxread(int fd, void *buf, size_t count)
   if(n != count)
     err(EXIT_FAILURE, "IO read error or inconsistent archive");
   return n;
+}
+
+char * strndup(const char *s, size_t n)
+{
+  char *r = xmalloc(n);
+
+  return strncpy(r, s, n);
 }

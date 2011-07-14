@@ -49,6 +49,7 @@
 
 char * readlink_malloc_n(const char *filename, ssize_t *n);
 size_t n_strncpy(char *dest, const char *src, size_t n);
+char * strndup(const char *s, size_t n);
 
 void * xmalloc(size_t size);
 void * xrealloc(void *ptr, size_t size);

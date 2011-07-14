@@ -30,12 +30,14 @@ ifneq "$(wildcard config.h)" ""
 CFLAGS += -DHAVE_CONFIG=1
 endif
 
+CFLAGS += -D_BSD_SOURCE=1
+
 .PHONY: all clean
 
 all: sar
 
 sar: $(OBJ)
-	$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS)
 
 %.o: %.c
 	$(CC) -Wp,-MMD,$*.d -c $(CFLAGS) -o $@ $<
