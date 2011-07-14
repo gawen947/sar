@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-14 17:53:22 gawen>
+   Time-stamp: <2011-07-14 18:13:53 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -542,7 +542,7 @@ struct sar_file * sar_read(const char *path)
   if(magik != MAGIK)
     errx(EXIT_FAILURE, "incompatible magik number");
 
-  out->version = magik & MAGIK_FORMAT_VERSION;
+  out->version = magik & MAGIK_FMT_VER;
 
   /* extract flags */
   xxread(out->fd, &out->flags, sizeof(out->flags));
@@ -610,7 +610,7 @@ static void read_link(struct sar_file *out, mode_t mode)
   xxread(out->fd, path, size);
 
   /* compute crc */
-  out->crc = crc32(path, out->crc, n);
+  out->crc = crc32(path, out->crc, size);
 
   if(symlink(out->wp, path) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
@@ -646,7 +646,7 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
     warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
 }
 
-static int rec_extract(struct file *out, size_t idx)
+static int rec_extract(struct sar_file *out, size_t idx)
 {
   assert(out);
   assert(out->fd);
@@ -669,9 +669,7 @@ static int rec_extract(struct file *out, size_t idx)
 
   switch(mode & M_IFMT) {
   case(M_IHARD):
-    goto APPEND_NAME;
-
-    goto CRC;
+    goto EXTRACT_NAME;
   case(M_ICTRL):
     switch(mode) {
     case(M_ICTRL | M_C_CHILD):
@@ -735,8 +733,9 @@ static int rec_extract(struct file *out, size_t idx)
     mtime = t_mtime;
   }
 
+EXTRACT_NAME:
   /* extract name */
-  xread(out, name, NAME_MAX);
+  xread(out->fd, name, NAME_MAX);
 
   /* compute crc */
   n = strlen(name);
@@ -762,8 +761,6 @@ static int rec_extract(struct file *out, size_t idx)
     break;
   case(M_IDIR):
     read_dir(out, real_mode);
-
-
     break;
   case(M_ILNK):
     read_link(out, real_mode);
@@ -784,8 +781,8 @@ static int rec_extract(struct file *out, size_t idx)
   times.actime  = atime;
   times.modtime = mtime;
 
-  xchown(out->wp, uid, gid);
-  xutime(out->wp, &times);
+  chown(out->wp, uid, gid);
+  utime(out->wp, &times);
 
 CRC:
   if(A_HAS_CRC(out)) {
