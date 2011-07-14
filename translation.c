@@ -1,5 +1,5 @@
 /* File: translation.c
-   Time-stamp: <2011-07-13 16:59:42 gawen>
+   Time-stamp: <2011-07-13 23:46:55 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -28,8 +28,12 @@
    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
    SUCH DAMAGE. */
 
-#include <stdint.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "sar.h"
 
 /* this file contains the translation functions for the types of the
    operating system to the archive types and vice versa */
@@ -82,7 +86,7 @@ uint16_t mode2uint16(mode_t mode)
     sar_mode |= M_IXUSR;
 
   /* group permission */
-  if(mode & S_IRGR)
+  if(mode & S_IRGRP)
     sar_mode |= M_IRGRP;
   if(mode & S_IWGRP)
     sar_mode |= M_IWGRP;
@@ -148,7 +152,7 @@ mode_t uint162mode(uint16_t sar_mode)
     mode |= S_IXUSR;
 
   /* group permission */
-  if(sar_mode & M_IRGR)
+  if(sar_mode & M_IRGRP)
     mode |= S_IRGRP;
   if(sar_mode & M_IWGRP)
     mode |= S_IWGRP;

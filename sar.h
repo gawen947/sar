@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-12 13:16:42 gawen>
+   Time-stamp: <2011-07-13 23:49:44 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -32,6 +32,7 @@
 #define _SAR_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <limits.h>
 
 #ifdef HAVE_CONFIG
@@ -51,7 +52,7 @@
                                     (up to 255) */
 #define MAGIK_FMT_VER 0xff000000 /* bit mask for archive file format bits fields
                                     in magik number */
-#define MAGIK      (0x00524153 & SAR_VERSION)
+#define MAGIK      (0x00524153 | MAGIK_VERSION)
 
 struct sar_file {
   int fd;          /* file descriptor of the archive */
@@ -62,6 +63,11 @@ struct sar_file {
   size_t wp_sz;    /* working path size */
   size_t wp_idx;   /* working path index */
   size_t wp_max;   /* working path max size */
+
+  struct sar_hardlink *hl_tbl; /* hard link table */
+  size_t hl_tbl_sz;
+
+  uint32_t crc;    /* current crc */
 };
 
 struct sar_node {
@@ -69,8 +75,8 @@ struct sar_node {
   uint16_t mode;    /* filetype and permissions */
   uint32_t uid;     /* user id */
   uint32_t gid;     /* group id */
-  uint64_t atime;   /* access time */
-  uint64_t mtime;   /* modification time */
+  int64_t atime;   /* access time */
+  int64_t mtime;   /* modification time */
   uint32_t crc;     /* checksum */
   const char *name; /* node name */
 
@@ -82,6 +88,13 @@ struct sar_node {
 
   /* device */
   uint32_t dev;     /* device (minor/major) */
+};
+
+struct sar_hardlink {
+  ino_t inode;      /* inode number */
+  dev_t device;     /* device id */
+  nlink_t links;    /* number of hard links */
+  char *path;       /* path to the file */
 };
 
 /* mode related flags */
@@ -137,11 +150,14 @@ struct sar_node {
 
 /* default and max sizes */
 enum max     { WP_MAX = PATH_MAX };
+enum size    { HL_TBL_SZ = 1024,
+               IO_SZ     = 32768 };
 
 struct sar_file * sar_creat(const char *path,
                             bool use_32id,
                             bool use_64time,
                             bool use_crc);
 void sar_add(struct sar_file *out, const char *path);
+void sar_close(struct sar_file *file);
 
 #endif /* _SAR_H_ */

@@ -1,0 +1,4 @@
+/* #define DISABLE_TIME_WIDTH_CHECK 1 */
+/* #define DISABLE_ID_WIDTH_CHECK 1 */
+/* #define DISABLE_NAME_WIDTH_CHECK 1 */
+/* #define DISABLE_PERMISSION_CHECK 1 */
