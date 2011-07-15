@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-15 01:24:12 gawen>
+   Time-stamp: <2011-07-15 02:08:13 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -86,7 +86,7 @@ static void help(const struct option *opts, const char *prog_name)
     "Add integrity checks to each file in the archive",      /* -C */
     "Use wider user/group id",                               /* -U */
     "Use wider timestamp (avoid year 1901/2038 problem)",    /* -T */
-    "Use more precise timestamps",                           /* -M */
+    "Use more precise timestamps (upto microseconds)",       /* -M */
     "Equivalent to -CUTM"                                    /* -w */
   };
 
@@ -198,11 +198,95 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       help(opts, pgn);
       exit(exit_status);
     }
+  }
 
-    /* consider remaining arguments */
+  /* consider remaining arguments */
+  switch(val->mode) {
+  case(MD_NONE):
+    if(argc - optind)
+      errx(EXIT_FAILURE, "nothing to do but arguments left");
+    verbose(2, "doing nothing");
+    exit(EXIT_SUCCESS);
+  case(MD_INFORMATION):
+    if(val->file) {
+      if(argc - optind != 1)
+        errx(EXIT_FAILURE, "except archive name");
+      val->file = argv[optind];
+    }
+    else if(argc - optind)
+      errx(EXIT_FAILURE, "except no arguments");
+    else
+      val->file = NULL;
+    break;
+  case(MD_CREATE):
+    if(val->file) {
+      if(argc - optind != 2)
+        errx(EXIT_FAILURE, "except archive name and a path to archive");
+      val->file   = argv[optind++];
+      val->source = argv[optind];
+    }
+    else if(argc - optind != 1)
+      errx("except a path to archive");
+    else {
+      val->file   = NULL;
+      val->source = argv[optind];
+    }
+    break;
+  case(MD_LIST):
+    if(val->file) {
+        if(argc - optind != 1)
+          errx(EXIT_FAILURE, "except archive name");
+        val->file = argv[optind];
+    }
+    else if(argc - optind)
+      errx(EXIT_FAILURE, "except no arguments");
+    else
+      val->file = NULL;
+    break;
+  case(MD_EXTRACT):
+    if(val->file) {
+      if(argc - optind != 1)
+        errx(EXIT_FAILURE, "except archive name");
+      val->file = argv[optind];
+    }
+    else if(argc - optind)
+      errx(EXIT_FAILURE, "except no arguments");
+    else
+      val->file = NULL;
+      break;
+  }
 
 #ifndef DISABLE_EGGS
     q0(val->verbose);
 #endif /* EGGS */
 }
 
+int main(int argc, char *argv[])
+{
+  struct opts_val val = {0};
+  struct sar_file *f;
+
+  cmdline(argc, argv, &val);
+
+  switch(val.mode) {
+  case(MD_INFORMATION):
+    f = sar_read(val.file, val.verbose);
+    sar_info(f);
+    break;
+  case(MD_CREATE):
+    f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.micro_time,
+                  val.crc, val.verbose);
+    sar_add(val.source);
+    break;
+  case(MD_EXTRACT):
+    f = sar_read(val.file, val.verbose);
+    sar_extract(f);
+    break;
+  case(MD_LIST):
+    f = sar_list(val.file, val.verbose);
+    sar_list(f);
+    break;
+  }
+
+  exit(EXIT_SUCCESS);
+}
