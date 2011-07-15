@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-16 00:02:48 gawen>
+   Time-stamp: <2011-07-16 01:47:52 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -30,6 +30,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <dirent.h>
@@ -612,6 +613,14 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
     crc_write(out, &mtime, sizeof(mtime));
   }
 
+  if(A_HAS_NTIME(out)) {
+    uint32_t atime_ns = buf.st_atim.tv_nsec;
+    uint32_t mtime_ns = buf.st_mtim.tv_nsec;
+
+    crc_write(out, &atime_ns, sizeof(atime_ns));
+    crc_write(out, &mtime_ns, sizeof(mtime_ns));
+  }
+
   write_name(out, name);
 
   switch(buf.st_mode & S_IFMT) {
@@ -845,12 +854,13 @@ static int rec_extract(struct sar_file *out, size_t idx)
   assert(out->wp);
 
   char name[NODE_MAX];
-  struct utimbuf times;
   time_t atime = 0;
   time_t mtime = 0;
   uid_t uid = 0;
   gid_t gid = 0;
   mode_t real_mode;
+  uint32_t atime_ns = 0;
+  uint32_t mtime_ns = 0;
   uint32_t crc;
   uint16_t mode;
   uint8_t size, i;
@@ -929,6 +939,13 @@ static int rec_extract(struct sar_file *out, size_t idx)
     mtime = t_mtime;
   }
 
+  if(A_HAS_NTIME(out)) {
+    xcrc_read(out, &atime_ns, sizeof(atime_ns));
+    xcrc_read(out, &mtime_ns, sizeof(mtime_ns));
+
+    /* endianess conversion should be done here */
+  }
+
 EXTRACT_NAME:
   /* extract name */
   xcrc_read(out, &size, sizeof(size));
@@ -970,12 +987,28 @@ EXTRACT_NAME:
   }
 
   /* change attributes */
-  times.actime  = atime;
-  times.modtime = mtime;
 
   if(!out->list_only) {
     chown(out->wp, uid, gid);
-    utime(out->wp, &times);
+
+    if(A_HAS_NTIME(out)) {
+      struct timespec times[2];
+
+      times[0].tv_sec  = atime;
+      times[0].tv_nsec = (long)atime_ns;
+
+      times[1].tv_sec  = mtime;
+      times[1].tv_nsec = (long)mtime_ns;
+
+      utimensat(AT_FDCWD, out->wp, times, AT_SYMLINK_NOFOLLOW);
+    }
+    else {
+      struct utimbuf times;
+
+      times.actime  = atime;
+      times.modtime = mtime;
+      utime(out->wp, &times);
+    }
   }
 
   /* compute crc */
@@ -1035,7 +1068,7 @@ void sar_info(struct sar_file *out)
          "\tHas CRC        : %s\n"
          "\tHas wide ID    : %s\n"
          "\tHas wide time  : %s\n"
-         "\tHas micro time : %s\n",
+         "\tHas nano time  : %s\n",
          out->version,
          S_BOOLEAN(A_HAS_CRC(out)),
          S_BOOLEAN(A_HAS_32ID(out)),

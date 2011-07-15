@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 00:02:25 gawen>
+   Time-stamp: <2011-07-16 00:43:54 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -28,6 +28,7 @@
    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
    SUCH DAMAGE. */
 
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -119,10 +120,10 @@ static void checkup_cap()
   time_t now = time(NULL);
 
   printf("System:\n");
-  printf(" Time width : %lu bits\n", 8 * sizeof(time_t));
-  printf(" UID width  : %lu bits\n", 8 * sizeof(uid_t));
-  printf(" GID width  : %lu bits\n", 8 * sizeof(gid_t));
-  printf(" Mode width : %lu bits\n", 8 * sizeof(mode_t));
+  printf(" Time width        : %lu bits\n", 8 * sizeof(time_t));
+  printf(" UID width         : %lu bits\n", 8 * sizeof(uid_t));
+  printf(" GID width         : %lu bits\n", 8 * sizeof(gid_t));
+  printf(" Mode width        : %lu bits\n", 8 * sizeof(mode_t));
   printf("\n");
 
   if((int32_t)now == now)
