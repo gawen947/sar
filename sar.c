@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 12:58:09 gawen>
+   Time-stamp: <2011-07-15 13:06:42 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -883,13 +883,13 @@ void sar_info(struct sar_file *out)
 {
   printf("SAR file:\n"
          "\tVersion        : %d\n"
-         "\tHas CRC        : %d\n"
-         "\tHas wide ID    : %d\n"
-         "\tHas wide time  : %d\n"
-         "\tHas micro time : %d\n",
+         "\tHas CRC        : %s\n"
+         "\tHas wide ID    : %s\n"
+         "\tHas wide time  : %s\n"
+         "\tHas micro time : %s\n",
          out->version,
-         A_HAS_CRC(out),
-         A_HAS_32ID(out),
-         A_HAS_64TIME(out),
-         A_HAS_MTIME(out));
+         S_BOOLEAN(A_HAS_CRC(out)),
+         S_BOOLEAN(A_HAS_32ID(out)),
+         S_BOOLEAN(A_HAS_64TIME(out)),
+         S_BOOLEAN(A_HAS_MTIME(out)));
 }

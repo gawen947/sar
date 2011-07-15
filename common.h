@@ -40,6 +40,7 @@
 #define DNAME_MAX 1024
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
+#define S_BOOLEAN(a) (a ? "yes" : "no")
 
 #define verbose(t, r, ...) if(r > t) fprintf (stderr, __VA_ARGS__)
 
