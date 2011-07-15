@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 18:31:38 gawen>
+   Time-stamp: <2011-07-15 19:06:24 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -60,6 +60,7 @@ static void write_regular(struct sar_file *out, const struct stat *buf);
 static void write_link(struct sar_file *out, const struct stat *buf);
 static void write_dev(struct sar_file *out, const struct stat *buf);
 static void write_control(struct sar_file *out, uint16_t id);
+static void write_name(struct sar_file *out, const char *name);
 static void read_regular(struct sar_file *out, mode_t mode);
 static void read_dir(struct sar_file *out, mode_t mode);
 static void read_link(struct sar_file *out, mode_t mode);
@@ -337,6 +338,39 @@ static void write_control(struct sar_file *out, uint16_t id)
   xwrite(out->fd, &control, sizeof(control));
 }
 
+static void write_name(struct sar_file *out, const char *name)
+{
+  uint8_t t_size;
+  size_t size = strlen(name);
+#ifndef DISABLE_NAME_WIDTH_CHECK
+  /* check for large node name */
+  if(size > NAME_MAX) {
+    char *short_name = strndup(name, NAME_MAX);
+    t_size = size = NAME_MAX;
+
+    short_name[NAME_MAX - 1] = '~';
+    short_name[NAME_MAX]     = '\0';
+
+    crc_write(out, &t_size, sizeof(t_size));
+    crc_write(out, short_name, size);
+
+    warnx("name too long for \"%s\" reduced to \"%s\"", out->wp, short_name);
+
+    free(short_name);
+  }
+  else {
+    t_size = size;
+    crc_write(out, &t_size, sizeof(t_size));
+    crc_write(out, name, size);
+  }
+#else
+  t_size = size;
+  crc_write(out, &t_size, sizeof(t_size));
+  crc_write(out, name, size);
+#endif /* NAME_WIDTH_CHECK */
+
+}
+
 static void show_file(const struct sar_file *out, const char *path,
                       const char *link, mode_t mode, uint16_t sar_mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
@@ -365,7 +399,6 @@ static void show_file(const struct sar_file *out, const char *path,
       }
     }
     else {
-
       /* regular file type */
       switch(mode & S_IFMT) {
       case(S_IFSOCK):
@@ -432,7 +465,7 @@ static void show_file(const struct sar_file *out, const char *path,
       }
     }
 
-    if((sar_mode & S_IFMT) == M_IHARD) {
+    if((sar_mode & M_IFMT) == M_IHARD) {
       s_mode[0] = 'h';
 
       if(display_crc && out->verbose >= 3)
@@ -493,8 +526,6 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   assert(name);
 
   struct stat buf;
-  size_t size;
-  uint8_t t_size;
   uint16_t mode;
 
 #ifndef DISABLE_PERMISSION_CHECK
@@ -520,13 +551,14 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
     char *link = watch_inode(out, buf.st_ino, buf.st_dev, buf.st_nlink);
 
     if(link) {
-      uint16_t size = strlen(link);
+      uint16_t link_size = strlen(link);
 
       mode = M_IHARD;
 
       crc_write(out, &mode, sizeof(mode));
-      crc_write(out, &size, sizeof(size));
-      crc_write(out, link, size);
+      write_name(out, name);
+      crc_write(out, &link_size, sizeof(link_size));
+      crc_write(out, link, link_size);
 
       out->link = link;
 
@@ -580,33 +612,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
     crc_write(out, &mtime, sizeof(mtime));
   }
 
-  size = strlen(name);
-#ifndef DISABLE_NAME_WIDTH_CHECK
-  /* check for large node name */
-  if(size > NAME_MAX) {
-    char *short_name = strndup(name, NAME_MAX);
-    t_size = size = NAME_MAX;
-
-    short_name[NAME_MAX - 1] = '~';
-    short_name[NAME_MAX]     = '\0';
-
-    crc_write(out, &t_size, sizeof(t_size));
-    crc_write(out, short_name, size);
-
-    warnx("name too long for \"%s\" reduced to \"%s\"", out->wp, short_name);
-
-    free(short_name);
-  }
-  else {
-    t_size = size;
-    crc_write(out, &t_size, sizeof(t_size));
-    crc_write(out, name, size);
-  }
-#else
-  t_size = size;
-  crc_write(out, &t_size, sizeof(t_size));
-  crc_write(out, name, size);
-#endif /* NAME_WIDTH_CHECK */
+  write_name(out, name);
 
   switch(buf.st_mode & S_IFMT) {
   case(S_IFREG):
@@ -633,7 +639,8 @@ CRC:
   show_file(out, out->wp, out->link, buf.st_mode, mode, buf.st_uid, buf.st_gid,
             buf.st_size, buf.st_atime, buf.st_mtime, out->crc,
             A_HAS_CRC(out));
-  free(out->link);
+  if(out->link)
+    free(out->link);
 
   return 0;
 }
@@ -785,17 +792,6 @@ static void read_link(struct sar_file *out, mode_t mode)
   char path[WP_MAX];
   uint16_t size;
 
-  if(out->list_only) {
-    xxread(out->fd, &size, sizeof(size));
-    out->size = size;
-
-    if(A_HAS_CRC(out))
-      size += sizeof(out->crc);
-
-    lseek(out->fd, size, SEEK_CUR);
-    return;
-  }
-
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
   out->size = size;
@@ -804,8 +800,14 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   xcrc_read(out, path, size);
 
-  out->link = path;
-  if(symlink(out->wp, path) < 0)
+  out->link = strdup(path);
+  if(out->list_only) {
+    if(A_HAS_CRC(out)) {
+      out->size += sizeof(out->crc);
+      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
+    }
+  }
+  else if(symlink(out->wp, path) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
 }
 
@@ -848,17 +850,6 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
   char path[WP_MAX];
   uint16_t size;
 
-  if(out->list_only) {
-    xxread(out->fd, &size, sizeof(size));
-    out->size = size;
-
-    if(A_HAS_CRC(out))
-      size += sizeof(out->crc);
-
-    lseek(out->fd, size, SEEK_CUR);
-    return;
-  }
-
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
   out->size = size;
@@ -867,8 +858,14 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 
   xcrc_read(out, path, size);
 
-  out->link = path;
-  if(link(path, out->wp) < 0)
+  out->link = strdup(path);
+  if(out->list_only) {
+    if(A_HAS_CRC(out)) {
+      out->size += sizeof(out->crc);
+      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
+    }
+  }
+  else if(link(path, out->wp) < 0)
     warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
 }
 
@@ -1023,6 +1020,8 @@ EXTRACT_NAME:
   show_file(out, out->wp, out->link, real_mode, mode,
             uid, gid, out->size, atime, mtime, out->crc,
             A_HAS_CRC(out) && !out->list_only);
+  if(out->link)
+    free(out->link);
 
   /* check for directory and extracts children */
   if((mode & M_IFMT) == M_IDIR) {
