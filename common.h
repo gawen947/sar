@@ -1,5 +1,5 @@
 /* File: common.h
-   Time-stamp: <2011-07-08 19:56:12 gawen>
+   Time-stamp: <2011-07-15 08:50:50 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -40,6 +40,8 @@
 #define DNAME_MAX 1024
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
+
+#define verbose(t, r, ...) if(r > t) fprintf (stderr, __VA_ARGS__)
 
 #ifndef NDEBUG
 # define UNPTR(a) a = NULL

@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-14 20:48:00 gawen>
+   Time-stamp: <2011-07-15 10:44:23 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -67,18 +67,24 @@ static void read_hardlink(struct sar_file *out, mode_t mode);
 static void clean_hardlinks(struct sar_file *out);
 static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
                                 nlink_t links);
+static void show_file(const struct sar_file *out, const char *path, mode_t mode,
+                      uid_t uid, gid_t gid, off_t size, time_t atime,
+                      time_t mtime, uint32_t crc);
 
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
 struct sar_file * sar_creat(const char *path,
                             bool use_32id,
                             bool use_64time,
-                            bool use_crc)
+                            bool use_crc,
+                            bool use_mtime,
+                            unsigned int verbose)
 {
   uint32_t magik = MAGIK;
 
   struct sar_file *out = xmalloc(sizeof(struct sar_file));
 
+  out->verbose = verbose;
   out->version = MAGIK_VERSION;
 
   if(use_32id)
@@ -87,6 +93,8 @@ struct sar_file * sar_creat(const char *path,
     out->flags |= A_I64TIME;
   if(use_crc)
     out->flags |= A_ICRC;
+  if(use_mtime)
+    out->flags |= A_IMTIME;
 
 #ifndef DISABLE_TIME_WIDTH_CHECK
   /* avoid 1901/2038 bug */
@@ -321,6 +329,17 @@ static void write_control(struct sar_file *out, uint16_t id)
   xwrite(out->fd, &control, sizeof(control));
 }
 
+static void show_file(const struct sar_file *out, const char *path, mode_t mode,
+                      uid_t uid, gid_t gid, off_t size, time_t atime,
+                      time_t mtime, uint32_t crc)
+{
+  if(out->verbose > 2)
+    printf("%d %d/%d %d %d-%d %s\n", mode, uid, gid, size, atime, mtime, path);
+  else if(out->verbose > 1)
+    printf("%s\n", path);
+}
+
+
 static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 {
   assert(out);
@@ -463,6 +482,9 @@ CRC:
   if(rmode)
     *rmode = buf.st_mode;
 
+  show_file(out, out->wp, buf.st_mode, buf.st_uid, buf.st_gid, buf.st_size,
+            buf.st_atime, buf.st_mtime, out->crc);
+
   return 0;
 }
 
@@ -522,11 +544,13 @@ static void rec_add(struct sar_file *out, const char *node)
 }
 
 /* open an archive for reading */
-struct sar_file * sar_read(const char *path)
+struct sar_file * sar_read(const char *path, unsigned int verbose)
 {
   uint32_t magik;
 
   struct sar_file *out = xmalloc(sizeof(struct sar_file));
+
+  out->verbose = verbose;
 
   if(!path)
     out->fd = STDIN_FILENO;
@@ -560,6 +584,12 @@ static void read_regular(struct sar_file *out, mode_t mode)
   char iobuf[IO_SIZE];
   uint64_t size;
 
+  if(out->list_only) {
+    xxread(out->fd, &size, sizeof(size));
+    lseek(out->fd, size, SEEK_CUR);
+    return;
+  }
+
   /* open output file */
   int fd = open(out->wp, O_CREAT | O_RDWR | O_TRUNC, mode);
   if(fd < 0)
@@ -590,6 +620,9 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
 static void read_dir(struct sar_file *out, mode_t mode)
 {
+  if(out->list_only)
+    return;
+
   if(mkdir(out->wp, mode) < 0)
     warn("cannot create directory \"%s\"", out->wp);
 }
@@ -598,6 +631,12 @@ static void read_link(struct sar_file *out, mode_t mode)
 {
   char path[WP_MAX];
   uint16_t size;
+
+  if(out->list_only) {
+    xxread(out->fd, &size, sizeof(size));
+    lseek(out->fd, size, SEEK_CUR);
+    return;
+  }
 
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
@@ -612,6 +651,9 @@ static void read_link(struct sar_file *out, mode_t mode)
 
 static void read_fifo(struct sar_file *out, mode_t mode)
 {
+  if(out->list_only)
+    return;
+
   if(mkfifo(out->wp, mode) < 0)
     warn("cannot create fifo \"%s\"", out->wp);
 }
@@ -619,6 +661,11 @@ static void read_fifo(struct sar_file *out, mode_t mode)
 static void read_device(struct sar_file *out, mode_t mode)
 {
   uint64_t dev;
+
+  if(out->list_only) {
+    lseek(out->fd, sizeof(dev), SEEK_CUR);
+    return;
+  }
 
   xcrc_read(out, &dev, sizeof(dev));
 
@@ -632,6 +679,12 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 {
   char path[WP_MAX];
   uint16_t size;
+
+  if(out->list_only) {
+    xxread(out->fd, &size, sizeof(size));
+    lseek(out->fd, size, SEEK_CUR);
+    return;
+  }
 
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
@@ -779,7 +832,7 @@ EXTRACT_NAME:
   utime(out->wp, &times);
 
   /* compute crc */
-  if(A_HAS_CRC(out)) {
+  if(A_HAS_CRC(out) && !out->list_only) {
     uint32_t crc;
     xxread(out->fd, &crc, sizeof(crc));
 
@@ -796,6 +849,9 @@ EXTRACT_NAME:
 
     out->wp[idx + size] = '\0';
   }
+
+  show_file(out, out->wp, real_mode, uid, gid, size,
+            atime, mtime, out->crc);
 
   return 0;
 }
@@ -815,4 +871,25 @@ void sar_extract(struct sar_file *out)
 
   free(out->wp);
   UNPTR(out->wp);
+}
+
+void sar_list(struct sar_file *out)
+{
+  out->list_only = true;
+  sar_extract(out);
+}
+
+void sar_info(struct sar_file *out)
+{
+  printf("SAR file:\n"
+         "\tVersion        : %d\n"
+         "\tHas CRC        : %d\n"
+         "\tHas wide ID    : %d\n"
+         "\tHas wide time  : %d\n"
+         "\tHas micro time : %d\n",
+         out->version,
+         A_HAS_CRC(out),
+         A_HAS_32ID(out),
+         A_HAS_64TIME(out),
+         A_HAS_MTIME(out));
 }

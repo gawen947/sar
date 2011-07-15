@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-15 02:08:13 gawen>
+   Time-stamp: <2011-07-15 10:46:09 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -39,6 +39,7 @@
 
 #include "egg.h"
 #include "sar.h"
+#include "common.h"
 
 enum mode { MD_NONE = 0,
             MD_INFORMATION,
@@ -50,7 +51,7 @@ struct opts_val {
   unsigned int verbose;
   enum mode mode;
 
-  bool file;
+  bool use_file;
   bool crc;
   bool wide_id;
   bool wide_stamp;
@@ -128,7 +129,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "wide-id", no_argument, NULL, 'U' },
     { "wide-time", no_argument, NULL, 'T' },
     { "micro-time", no_argument, NULL, 'M' },
-    { "wide", no_argument, NULL, 'w' }
+    { "wide", no_argument, NULL, 'w' },
     { NULL, 0, NULL, 0 }
   };
 
@@ -159,7 +160,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->mode = MD_LIST;
       break;
     case 'f':
-      val->file = true;
+      val->use_file = true;
       break;
     case 'C':
       if(val->mode != MD_CREATE)
@@ -205,10 +206,10 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   case(MD_NONE):
     if(argc - optind)
       errx(EXIT_FAILURE, "nothing to do but arguments left");
-    verbose(2, "doing nothing");
+    verbose(2, val->verbose, "doing nothing");
     exit(EXIT_SUCCESS);
   case(MD_INFORMATION):
-    if(val->file) {
+    if(val->use_file) {
       if(argc - optind != 1)
         errx(EXIT_FAILURE, "except archive name");
       val->file = argv[optind];
@@ -219,21 +220,21 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->file = NULL;
     break;
   case(MD_CREATE):
-    if(val->file) {
+    if(val->use_file) {
       if(argc - optind != 2)
         errx(EXIT_FAILURE, "except archive name and a path to archive");
       val->file   = argv[optind++];
       val->source = argv[optind];
     }
     else if(argc - optind != 1)
-      errx("except a path to archive");
+      errx(EXIT_FAILURE, "except a path to archive");
     else {
       val->file   = NULL;
       val->source = argv[optind];
     }
     break;
   case(MD_LIST):
-    if(val->file) {
+    if(val->use_file) {
         if(argc - optind != 1)
           errx(EXIT_FAILURE, "except archive name");
         val->file = argv[optind];
@@ -244,7 +245,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->file = NULL;
     break;
   case(MD_EXTRACT):
-    if(val->file) {
+    if(val->use_file) {
       if(argc - optind != 1)
         errx(EXIT_FAILURE, "except archive name");
       val->file = argv[optind];
@@ -269,6 +270,8 @@ int main(int argc, char *argv[])
   cmdline(argc, argv, &val);
 
   switch(val.mode) {
+  case(MD_NONE):
+    break;
   case(MD_INFORMATION):
     f = sar_read(val.file, val.verbose);
     sar_info(f);
@@ -276,14 +279,14 @@ int main(int argc, char *argv[])
   case(MD_CREATE):
     f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.micro_time,
                   val.crc, val.verbose);
-    sar_add(val.source);
+    sar_add(f, val.source);
     break;
   case(MD_EXTRACT):
     f = sar_read(val.file, val.verbose);
     sar_extract(f);
     break;
   case(MD_LIST):
-    f = sar_list(val.file, val.verbose);
+    f = sar_read(val.file, val.verbose);
     sar_list(f);
     break;
   }
