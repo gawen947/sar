@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 19:35:54 gawen>
+   Time-stamp: <2011-07-15 19:48:30 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -738,10 +738,6 @@ static void read_regular(struct sar_file *out, mode_t mode)
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
     out->size = size;
-
-    if(A_HAS_CRC(out))
-      size += sizeof(out->crc);
-
     lseek(out->fd, size, SEEK_CUR);
     return;
   }
@@ -777,13 +773,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
 static void read_dir(struct sar_file *out, mode_t mode)
 {
-  if(out->list_only)  {
-    if(A_HAS_CRC(out))
-      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
-    return;
-  }
-
-  if(mkdir(out->wp, mode) < 0)
+  if(!out->list_only && mkdir(out->wp, mode) < 0)
     warn("cannot create directory \"%s\"", out->wp);
 }
 
@@ -801,25 +791,13 @@ static void read_link(struct sar_file *out, mode_t mode)
   xcrc_read(out, path, size);
 
   out->link = strdup(path);
-  if(out->list_only) {
-    if(A_HAS_CRC(out)) {
-      out->size += sizeof(out->crc);
-      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
-    }
-  }
-  else if(symlink(path, out->wp) < 0)
+  if(!out->list_only && symlink(path, out->wp) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
 }
 
 static void read_fifo(struct sar_file *out, mode_t mode)
 {
-  if(out->list_only)  {
-    if(A_HAS_CRC(out))
-      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
-    return;
-  }
-
-  if(mkfifo(out->wp, mode) < 0)
+  if(!out->list_only && mkfifo(out->wp, mode) < 0)
     warn("cannot create fifo \"%s\"", out->wp);
 }
 
@@ -830,10 +808,7 @@ static void read_device(struct sar_file *out, mode_t mode)
   out->size = sizeof(dev);
 
   if(out->list_only) {
-    if(A_HAS_CRC(out))
-      lseek(out->fd, sizeof(dev) + sizeof(out->crc), SEEK_CUR);
-    else
-      lseek(out->fd, sizeof(dev), SEEK_CUR);
+    lseek(out->fd, sizeof(dev), SEEK_CUR);
     return;
   }
 
@@ -859,13 +834,7 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
   xcrc_read(out, path, size);
 
   out->link = strdup(path);
-  if(out->list_only) {
-    if(A_HAS_CRC(out)) {
-      out->size += sizeof(out->crc);
-      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
-    }
-  }
-  else if(link(path, out->wp) < 0)
+  if(!out->list_only && link(path, out->wp) < 0)
     warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
 }
 
@@ -882,6 +851,7 @@ static int rec_extract(struct sar_file *out, size_t idx)
   uid_t uid = 0;
   gid_t gid = 0;
   mode_t real_mode;
+  uint32_t crc;
   uint16_t mode;
   uint8_t size, i;
 
@@ -1009,17 +979,16 @@ EXTRACT_NAME:
   }
 
   /* compute crc */
-  if(A_HAS_CRC(out) && !out->list_only) {
-    uint32_t crc;
+  if(A_HAS_CRC(out)) {
     xxread(out->fd, &crc, sizeof(crc));
 
-    if(crc != out->crc)
+    if(!out->list_only && crc != out->crc)
       warnx("corrupted file \"%s\"", out->wp);
   }
 
   show_file(out, out->wp, out->link, real_mode, mode,
-            uid, gid, out->size, atime, mtime, out->crc,
-            A_HAS_CRC(out) && !out->list_only);
+            uid, gid, out->size, atime, mtime, out->list_only ? crc : out->crc,
+            A_HAS_CRC(out));
   if(out->link)
     free(out->link);
 
