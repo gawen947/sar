@@ -130,6 +130,8 @@ static void checkup_cap()
     printf(" Should use '-T' option : no\n");
   else
     printf(" Should use '-T' option : yes\n");
+  printf(" Should use '-U' option : no\n");
+  printf(" May use '-N' option    : yes\n");
 }
 
 static void except_archive(int argc, int optind, char *argv[],
