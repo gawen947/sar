@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 17:53:46 gawen>
+   Time-stamp: <2011-07-15 18:31:38 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -306,13 +306,14 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
 static void write_link(struct sar_file *out, const struct stat *buf)
 {
   ssize_t n;
-  uint8_t size;
+  uint16_t size;
   char *ln = xreadlink_malloc_n(out->wp, &n);
 
   if(!ln)
     err(EXIT_FAILURE, "cannot read \"%s\"", out->wp);
 
-  out->link = strdup(ln);
+  out->link = strndup(ln, n);
+  out->link[n] = '\0';
 
   size = n;
 
@@ -509,7 +510,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   out->link = NULL;
 
   /* stat the file */
-  if(stat(out->wp, &buf) < 0) {
+  if(lstat(out->wp, &buf) < 0) {
     warn("could not stat \"%s\"", out->wp);
     return -1;
   }
