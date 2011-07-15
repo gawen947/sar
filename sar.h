@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-14 17:57:12 gawen>
+   Time-stamp: <2011-07-15 16:57:24 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -59,10 +59,12 @@ struct sar_file {
   uint8_t flags;   /* flags of this archive */
   uint8_t version; /* version of sar archive */
 
-  char *wp;        /* working path */
-  size_t wp_sz;    /* working path size */
-  size_t wp_idx;   /* working path index */
-  size_t wp_max;   /* working path max size */
+  char *wp;         /* working path */
+  size_t wp_sz;     /* working path size */
+  size_t wp_idx;    /* working path index */
+  size_t wp_max;    /* working path max size */
+  char *link;       /* symlink or hardlink destination */
+  off_t size;       /* size of a node */
 
   struct sar_hardlink *hl_tbl; /* hard link table */
   size_t hl_tbl_sz;
@@ -136,9 +138,13 @@ struct sar_hardlink {
 
 /* default and max sizes */
 enum max     { WP_MAX = 4095,
-               NODE_MAX = 255 };
+               NODE_MAX = 255,
+               DATE_MAX = 255 };
 enum size    { HL_TBL_SZ = 1024,
                IO_SZ     = 65536 };
+
+/* misc. */
+#define DATE_FORMAT "%a, %d %b %Y %T %z" /* RFC 2822-compliant date format */
 
 struct sar_file * sar_creat(const char *path,
                             bool use_32id,

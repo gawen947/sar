@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 14:07:42 gawen>
+   Time-stamp: <2011-07-15 17:00:27 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -42,6 +42,8 @@
 #include <utime.h>
 #include <time.h>
 #include <err.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "translation.h"
 #include "common.h"
@@ -65,11 +67,12 @@ static void read_fifo(struct sar_file *out, mode_t mode);
 static void read_device(struct sar_file *out, mode_t mode);
 static void read_hardlink(struct sar_file *out, mode_t mode);
 static void clean_hardlinks(struct sar_file *out);
-static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
-                                nlink_t links);
-static void show_file(const struct sar_file *out, const char *path, mode_t mode,
+static char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
+                          nlink_t links);
+static void show_file(const struct sar_file *out, const char *path,
+                      const char *link, mode_t mode, uint16_t sar_mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
-                      time_t mtime, uint32_t crc);
+                      time_t mtime, uint32_t crc, bool display_crc);
 
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
@@ -239,8 +242,8 @@ static void free_hardlinks(struct sar_file *out)
       free(out->hl_tbl[i].path);
 }
 
-static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
-                                nlink_t links)
+static char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
+                          nlink_t links)
 {
   assert(out);
   assert(out->hl_tbl);
@@ -253,7 +256,7 @@ static const char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
     if(!out->hl_tbl[i].path)
       null_idx = i;
     else if(out->hl_tbl[i].inode == inode && out->hl_tbl[i].device == device) {
-      const char *path = strdup(out->hl_tbl[i].path);
+      char *path = strdup(out->hl_tbl[i].path);
 
       out->hl_tbl[i].links--;
 
@@ -304,15 +307,19 @@ static void write_link(struct sar_file *out, const struct stat *buf)
 {
   ssize_t n;
   uint8_t size;
-  const char *ln = xreadlink_malloc_n(out->wp, &n);
+  char *ln = xreadlink_malloc_n(out->wp, &n);
 
   if(!ln)
     err(EXIT_FAILURE, "cannot read \"%s\"", out->wp);
+
+  out->link = strdup(ln);
 
   size = n;
 
   crc_write(out, &size, sizeof(size));
   crc_write(out, ln, n);
+
+  free(ln);
 }
 
 static void write_dev(struct sar_file *out, const struct stat *buf)
@@ -329,16 +336,151 @@ static void write_control(struct sar_file *out, uint16_t id)
   xwrite(out->fd, &control, sizeof(control));
 }
 
-static void show_file(const struct sar_file *out, const char *path, mode_t mode,
+static void show_file(const struct sar_file *out, const char *path,
+                      const char *link, mode_t mode, uint16_t sar_mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
-                      time_t mtime, uint32_t crc)
+                      time_t mtime, uint32_t crc, bool display_crc)
 {
-  if(out->verbose >= 2)
-    printf("%d %d/%d %d %d-%d %s\n", mode, uid, gid, size, atime, mtime, path);
+  if(out->verbose >= 2) {
+    char date[DATE_MAX];
+    struct passwd *p_uid;
+    struct group  *g_gid;
+    char s_mode[] = "?---------";
+
+    if(M_ISCTRL(sar_mode)) {
+      /* special file type */
+      switch(sar_mode) {
+      case(M_ICTRL | M_C_CHILD):
+        s_mode[0] = 'C';
+        printf("%s\n", s_mode);
+        return;
+      case(M_ICTRL | M_C_IGNORE):
+        s_mode[0] = 'I';
+        if(display_crc)
+          printf("%s\t0x%x\t%s\n", s_mode, crc, path);
+        else
+          printf("%s\t%s\n", s_mode, path);
+        return;
+      }
+    }
+    else {
+
+      /* regular file type */
+      switch(mode & S_IFMT) {
+      case(S_IFSOCK):
+        s_mode[0] = 's';
+        break;
+      case(S_IFLNK):
+        s_mode[0] = 'l';
+        break;
+      case(S_IFREG):
+        s_mode[0] = '-';
+        break;
+      case(S_IFDIR):
+        s_mode[0] = 'd';
+        break;
+      case(S_IFBLK):
+        s_mode[0] = 'b';
+        break;
+      case(S_IFCHR):
+        s_mode[0] = 'c';
+        break;
+      case(S_IFIFO):
+        s_mode[0] = 'p';
+        break;
+      }
+
+      /* basic permissions */
+      if(mode & S_IRUSR)
+        s_mode[1] = 'r';
+      if(mode & S_IWUSR)
+        s_mode[2] = 'w';
+      if(mode & S_IXUSR)
+        s_mode[3] = 'x';
+      if(mode & S_IRGRP)
+        s_mode[4] = 'r';
+      if(mode & S_IWGRP)
+        s_mode[5] = 'w';
+      if(mode & S_IXGRP)
+        s_mode[6] = 'x';
+      if(mode & S_IROTH)
+        s_mode[7] = 'r';
+      if(mode & S_IWOTH)
+        s_mode[8] = 'w';
+      if(mode & S_IXOTH)
+        s_mode[9] = 'x';
+
+      /* extended permissions */
+      if(mode & S_ISUID) {
+        if(s_mode[3] == 'x')
+          s_mode[3] = 's';
+        else
+          s_mode[3] = 'S';
+      }
+      if(mode & S_ISGID) {
+        if(s_mode[6] == 'x')
+          s_mode[6] = 's';
+        else
+          s_mode[6] = 'S';
+      }
+      if(mode & S_ISVTX) {
+        if(s_mode[9] == 'x')
+          s_mode[9] = 't';
+        else
+          s_mode[9] = 'T';
+      }
+    }
+
+    if((sar_mode & S_IFMT) == M_IHARD) {
+      s_mode[0] = 'h';
+
+      if(display_crc)
+        printf("%s\t%s -> %s\n", s_mode, path, link);
+      else
+        printf("%s\t0x%x\t%s -> %s\n", s_mode, crc, path, link);
+      return;
+    }
+
+    printf("%s\t", s_mode);
+
+    /* user name / group name */
+    p_uid = getpwuid(uid);
+    g_gid = getgrgid(gid);
+
+    if(p_uid)
+      printf("%s/", p_uid->pw_name);
+    else
+      printf("%d/", uid);
+
+    if(g_gid)
+      printf("%s\t", g_gid->gr_name);
+    else
+      printf("%d\t", gid);
+
+    /* size */
+    printf("%ld\t", size);
+
+    /* times */
+    if(out->verbose >= 3) {
+      strftime(date, DATE_MAX, DATE_FORMAT, localtime(&atime));
+      printf("%s\t", date);
+    }
+    strftime(date, DATE_MAX, DATE_FORMAT, localtime(&atime));
+    printf("%s\t", date);
+
+    /* crc */
+    if(display_crc)
+      printf("0x%x\t", out->crc);
+
+    /* path */
+    if(link)
+      printf("%s -> %s\n", path, link);
+    else
+      printf("%s\n", path);
+  }
   else if(out->verbose >= 1)
     printf("%s\n", path);
 }
-
 
 static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 {
@@ -358,8 +500,10 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   }
 #endif /* PERMISSION_CHECK */
 
-  /* setup crc and we don't care if we will compute it or not */
-  out->crc = 0;
+  /* setup crc and fallback variables we don't
+     care if we will compute it or not */
+  out->crc  = 0;
+  out->link = NULL;
 
   /* stat the file */
   if(stat(out->wp, &buf) < 0) {
@@ -369,7 +513,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 
   /* watch for hard link */
   if(buf.st_nlink >= 2 && !S_ISDIR(buf.st_mode)) {
-    const char *link = watch_inode(out, buf.st_ino, buf.st_dev, buf.st_nlink);
+    char *link = watch_inode(out, buf.st_ino, buf.st_dev, buf.st_nlink);
 
     if(link) {
       uint16_t size = strlen(link);
@@ -379,6 +523,8 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
       crc_write(out, &mode, sizeof(mode));
       crc_write(out, &size, sizeof(size));
       crc_write(out, link, size);
+
+      out->link = link;
 
       goto CRC;
     }
@@ -480,8 +626,10 @@ CRC:
   if(rmode)
     *rmode = buf.st_mode;
 
-  show_file(out, out->wp, buf.st_mode, buf.st_uid, buf.st_gid, buf.st_size,
-            buf.st_atime, buf.st_mtime, out->crc);
+  show_file(out, out->wp, out->link, buf.st_mode, mode, buf.st_uid, buf.st_gid,
+            buf.st_size, buf.st_atime, buf.st_mtime, out->crc,
+            A_HAS_CRC(out));
+  free(out->link);
 
   return 0;
 }
@@ -584,6 +732,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
+    out->size = size;
 
     if(A_HAS_CRC(out))
       size += sizeof(out->crc);
@@ -599,6 +748,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
   /* read file size */
   xcrc_read(out, &size, sizeof(size));
+  out->size = size;
 
   /* endianess conversion for size should be done here */
 
@@ -628,7 +778,6 @@ static void read_dir(struct sar_file *out, mode_t mode)
     return;
   }
 
-
   if(mkdir(out->wp, mode) < 0)
     warn("cannot create directory \"%s\"", out->wp);
 }
@@ -640,6 +789,7 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
+    out->size = size;
 
     if(A_HAS_CRC(out))
       size += sizeof(out->crc);
@@ -650,11 +800,13 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
+  out->size = size;
 
   /* endianess conversion should be done here for size */
 
   xcrc_read(out, path, size);
 
+  out->link = path;
   if(symlink(out->wp, path) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
 }
@@ -674,6 +826,8 @@ static void read_fifo(struct sar_file *out, mode_t mode)
 static void read_device(struct sar_file *out, mode_t mode)
 {
   uint64_t dev;
+
+  out->size = sizeof(dev);
 
   if(out->list_only) {
     if(A_HAS_CRC(out))
@@ -698,6 +852,7 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
+    out->size = size;
 
     if(A_HAS_CRC(out))
       size += sizeof(out->crc);
@@ -708,11 +863,13 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
+  out->size = size;
 
   /* endianess conversion should be done here for size */
 
   xcrc_read(out, path, size);
 
+  out->link = path;
   if(link(path, out->wp) < 0)
     warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
 }
@@ -733,8 +890,11 @@ static int rec_extract(struct sar_file *out, size_t idx)
   uint16_t mode;
   uint8_t size, i;
 
-  /* setup crc and we don't care if we won't compute it or not */
+  /* setup crc and fallback variables we don't
+     care if we won't compute it or not */
   out->crc = 0;
+  out->link = 0;
+  out->size = 0;
 
   xcrc_read(out, &mode, sizeof(mode));
 
@@ -860,6 +1020,10 @@ EXTRACT_NAME:
       warnx("corrupted file \"%s\"", out->wp);
   }
 
+  show_file(out, out->wp, out->link, real_mode, mode,
+            uid, gid, out->size, atime, mtime, out->crc,
+            A_HAS_CRC(out) && !out->list_only);
+
   /* check for directory and extracts children */
   if((mode & M_IFMT) == M_IDIR) {
     out->wp[idx + size]     = '/';
@@ -869,9 +1033,6 @@ EXTRACT_NAME:
 
     out->wp[idx + size] = '\0';
   }
-
-  show_file(out, out->wp, real_mode, uid, gid, size,
-            atime, mtime, out->crc);
 
   return 0;
 }
