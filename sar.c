@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 17:00:27 gawen>
+   Time-stamp: <2011-07-15 17:09:04 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -356,8 +356,8 @@ static void show_file(const struct sar_file *out, const char *path,
         return;
       case(M_ICTRL | M_C_IGNORE):
         s_mode[0] = 'I';
-        if(display_crc)
-          printf("%s\t0x%x\t%s\n", s_mode, crc, path);
+        if(display_crc && out->verbose >= 3)
+          printf("%s\t%s {0x%x}\n", s_mode, path, crc);
         else
           printf("%s\t%s\n", s_mode, path);
         return;
@@ -434,10 +434,10 @@ static void show_file(const struct sar_file *out, const char *path,
     if((sar_mode & S_IFMT) == M_IHARD) {
       s_mode[0] = 'h';
 
-      if(display_crc)
-        printf("%s\t%s -> %s\n", s_mode, path, link);
+      if(display_crc && out->verbose >= 3)
+        printf("%s\t%s -> %s {0x%x}\n", s_mode, path, link, crc);
       else
-        printf("%s\t0x%x\t%s -> %s\n", s_mode, crc, path, link);
+        printf("%s\t%s -> %s\n", s_mode, path, link);
       return;
     }
 
@@ -461,22 +461,25 @@ static void show_file(const struct sar_file *out, const char *path,
     printf("%ld\t", size);
 
     /* times */
-    if(out->verbose >= 3) {
+    if(out->verbose >= 4) {
       strftime(date, DATE_MAX, DATE_FORMAT, localtime(&atime));
       printf("%s\t", date);
     }
     strftime(date, DATE_MAX, DATE_FORMAT, localtime(&atime));
     printf("%s\t", date);
 
-    /* crc */
-    if(display_crc)
-      printf("0x%x\t", out->crc);
 
     /* path */
     if(link)
-      printf("%s -> %s\n", path, link);
+      printf("%s -> %s", path, link);
     else
-      printf("%s\n", path);
+      printf("%s", path);
+
+    /* crc */
+    if(display_crc && out->verbose >= 3)
+      printf(" {0x%x}\n", out->crc);
+    else
+      printf("\n");
   }
   else if(out->verbose >= 1)
     printf("%s\n", path);
