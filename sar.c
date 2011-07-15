@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 19:24:53 gawen>
+   Time-stamp: <2011-07-15 19:35:54 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -807,7 +807,7 @@ static void read_link(struct sar_file *out, mode_t mode)
       lseek(out->fd, sizeof(out->crc), SEEK_CUR);
     }
   }
-  else if(symlink(out->wp, path) < 0)
+  else if(symlink(path, out->wp) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
 }
 
