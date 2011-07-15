@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 17:09:04 gawen>
+   Time-stamp: <2011-07-15 17:53:46 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -498,7 +498,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 
 #ifndef DISABLE_PERMISSION_CHECK
   if(access(out->wp, R_OK) < 0) {
-    warn("could not open \"%s\"", out->wp);
+    warn("cannot open \"%s\"", out->wp);
     return -1;
   }
 #endif /* PERMISSION_CHECK */
@@ -655,12 +655,6 @@ static void rec_add(struct sar_file *out, const char *node)
     if(!dp) {
       warn("cannot open \"%s\"", out->wp);
       return;
-    }
-
-    /* check working path size */
-    if(out->wp_sz - out->wp_idx < 264) {
-      out->wp_sz += 4096;
-      out->wp     = xrealloc(out->wp, out->wp_sz);
     }
 
     while((e = readdir(dp))) {
@@ -1011,8 +1005,10 @@ EXTRACT_NAME:
   times.actime  = atime;
   times.modtime = mtime;
 
-  chown(out->wp, uid, gid);
-  utime(out->wp, &times);
+  if(!out->list_only) {
+    chown(out->wp, uid, gid);
+    utime(out->wp, &times);
+  }
 
   /* compute crc */
   if(A_HAS_CRC(out) && !out->list_only) {
