@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 13:17:17 gawen>
+   Time-stamp: <2011-07-15 13:43:06 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -94,7 +94,7 @@ struct sar_file * sar_creat(const char *path,
   if(use_crc)
     out->flags |= A_ICRC;
   if(use_mtime)
-    out->flags |= A_IMTIME;
+    out->flags |= A_INTIME;
 
 #ifndef DISABLE_TIME_WIDTH_CHECK
   /* avoid 1901/2038 bug */

@@ -126,13 +126,13 @@ struct sar_hardlink {
 #define A_I32ID   0x1 /* use 32 bits uid/gid instead of 16 bits */
 #define A_I64TIME 0x2 /* use 64 bits time instead of 32 bits */
 #define A_ICRC    0x4 /* use a checksum for each file */
-#define A_IMTIME  0x8 /* use microsecond timestamp */
+#define A_INTIME  0x8 /* use nanosecond timestamp */
 
 #define A_HAS(a, t)    ((a->flags) & A_I ## t)
 #define A_HAS_32ID(a)   A_HAS(a, 32ID)
 #define A_HAS_64TIME(a) A_HAS(a, 64TIME)
 #define A_HAS_CRC(a)    A_HAS(a, CRC)
-#define A_HAS_MTIME(a)  A_HAS(a, MTIME)
+#define A_HAS_NTIME(a)  A_HAS(a, NTIME)
 
 /* default and max sizes */
 enum max     { WP_MAX = 4095,

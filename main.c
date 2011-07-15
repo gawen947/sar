@@ -55,7 +55,7 @@ struct opts_val {
   bool crc;
   bool wide_id;
   bool wide_stamp;
-  bool micro_time;
+  bool nano_time;
 
   const char *file;
   const char *source;
@@ -87,8 +87,8 @@ static void help(const struct option *opts, const char *prog_name)
     "Add integrity checks to each file in the archive",      /* -C */
     "Use wider user/group id",                               /* -U */
     "Use wider timestamp (avoid year 1901/2038 problem)",    /* -T */
-    "Use more precise timestamps (upto microseconds)",       /* -M */
-    "Equivalent to -CUTM"                                    /* -w */
+    "Use more precise timestamps (upto nanoseconds)",        /* -M */
+    "Equivalent to -CUTN"                                    /* -w */
   };
 
   fprintf(stderr, "Usage: %s [OPTIONS]\n", prog_name);
@@ -128,7 +128,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "crc", no_argument, NULL, 'C' },
     { "wide-id", no_argument, NULL, 'U' },
     { "wide-time", no_argument, NULL, 'T' },
-    { "micro-time", no_argument, NULL, 'M' },
+    { "nano-time", no_argument, NULL, 'N' },
     { "wide", no_argument, NULL, 'w' },
     { NULL, 0, NULL, 0 }
   };
@@ -138,7 +138,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   pgn = pgn ? (pgn + 1) : argv[0];
 
   while(1) {
-    int c = getopt_long(argc, argv, "VhvicxtfCUTMw", opts, NULL);
+    int c = getopt_long(argc, argv, "VhvicxtfCUTNw", opts, NULL);
 
     if(c == -1)
       break;
@@ -180,7 +180,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     case 'M':
       if(val->mode != MD_CREATE)
         errx(EXIT_FAILURE, "%c should be used with 'create' mode", c);
-      val->micro_time = true;
+      val->nano_time = true;
       break;
     case 'w':
       if(val->mode != MD_CREATE)
@@ -188,7 +188,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->crc        = true;
       val->wide_id    = true;
       val->wide_stamp = true;
-      val->micro_time = true;
+      val->nano_time = true;
       break;
     case 'V':
       version();
@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
     sar_info(f);
     break;
   case(MD_CREATE):
-    f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.micro_time,
+    f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.nano_time,
                   val.crc, val.verbose);
     sar_add(f, val.source);
     break;
