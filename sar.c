@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 19:48:30 gawen>
+   Time-stamp: <2011-07-16 00:02:48 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -103,7 +103,7 @@ struct sar_file * sar_creat(const char *path,
 #ifndef DISABLE_TIME_WIDTH_CHECK
   /* avoid 1901/2038 bug */
   time_t now = time(NULL);
-  if(now > INT32_MAX || now < INT32_MIN)
+  if((int32_t)now == now)
     out->flags |= A_I64TIME;
 #endif /* TIME_WIDTH_CHECK */
 

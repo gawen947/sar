@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-15 22:55:14 gawen>
+   Time-stamp: <2011-07-16 00:02:25 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -35,6 +35,7 @@
 #include <getopt.h>
 #include <sysexits.h>
 #include <errno.h>
+#include <time.h>
 #include <err.h>
 
 #include "egg.h"
@@ -79,6 +80,7 @@ static void help(const struct option *opts, const char *prog_name)
     "Print version information",                             /* -V */
     "Print this message",                                    /* -h */
     "Be verbose (may be used multiple times)",               /* -v */
+    "Checkup capabilities",                                  /* -k */
     "Display basic informations about an archive",           /* -i */
     "Create a new archive",                                  /* -c */
     "Extract all files from an archive",                     /* -x */
@@ -110,6 +112,23 @@ static void help(const struct option *opts, const char *prog_name)
       fputc(' ', stderr);
     fprintf(stderr, "%s\n", *hlp);
   }
+}
+
+static void checkup_cap()
+{
+  time_t now = time(NULL);
+
+  printf("System:\n");
+  printf(" Time width : %lu bits\n", 8 * sizeof(time_t));
+  printf(" UID width  : %lu bits\n", 8 * sizeof(uid_t));
+  printf(" GID width  : %lu bits\n", 8 * sizeof(gid_t));
+  printf(" Mode width : %lu bits\n", 8 * sizeof(mode_t));
+  printf("\n");
+
+  if((int32_t)now == now)
+    printf(" Should use '-T' option : no\n");
+  else
+    printf(" Should use '-T' option : yes\n");
 }
 
 static void except_archive(int argc, int optind, char *argv[],
@@ -152,6 +171,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "version", no_argument, NULL, 'V' },
     { "help", no_argument, NULL, 'h' },
     { "verbose", no_argument, NULL, 'v' },
+    { "cap", no_argument, NULL, 'k' },
     { "information", no_argument, NULL, 'i' },
     { "create", no_argument, NULL, 'c' },
     { "extract", no_argument, NULL, 'x' },
@@ -170,7 +190,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   pgn = pgn ? (pgn + 1) : argv[0];
 
   while(1) {
-    int c = getopt_long(argc, argv, "VhvicxtfCUTNw", opts, NULL);
+    int c = getopt_long(argc, argv, "VhvkicxtfCUTNw", opts, NULL);
 
     if(c == -1)
       break;
@@ -212,6 +232,9 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->wide_stamp = true;
       val->nano_time = true;
       break;
+    case 'k':
+      checkup_cap();
+      exit(EXIT_SUCCESS);
     case 'V':
       version();
       exit(EXIT_SUCCESS);
@@ -226,7 +249,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   /* consider remaining arguments */
   switch(val->mode) {
   case(MD_NONE):
-    errx(EXIT_SUCCESS, "You must specify one of the 'cxti' options\n"
+    errx(EXIT_SUCCESS, "You must specify one of the 'cxti' or '--cap' options\n"
          "Try '%s --help'", pgn);
   case(MD_INFORMATION):
     if(val->use_file) {
