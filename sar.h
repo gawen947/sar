@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-15 16:57:24 gawen>
+   Time-stamp: <2011-07-15 19:18:27 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -96,6 +96,7 @@ struct sar_hardlink {
 #define M_ICTRL 0x7    /* control node */
 
 /* permission flags */
+#define M_IPERM 0xfff8 /* bit maks for permission type bit fields */
 #define M_ISUID 0x8    /* set UID bit */
 #define M_ISGID 0x10   /* set-group-ID bit */
 #define M_ISVTX 0x20   /* sticky bit */

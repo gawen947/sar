@@ -1,5 +1,5 @@
 /* File: translation.c
-   Time-stamp: <2011-07-15 18:18:39 gawen>
+   Time-stamp: <2011-07-15 19:24:22 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -127,6 +127,10 @@ mode_t uint162mode(uint16_t sar_mode)
     break;
   case(M_ICHR):
     mode = S_IFCHR;
+    break;
+  case(M_IHARD):
+    /* small workaround since hardlink type doesn't exist */
+    mode = S_IFREG;
     break;
   default:
     /* any other type is not describable as a

@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 19:06:24 gawen>
+   Time-stamp: <2011-07-15 19:24:53 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -553,7 +553,7 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
     if(link) {
       uint16_t link_size = strlen(link);
 
-      mode = M_IHARD;
+      mode = (mode2uint16(buf.st_mode) & M_IPERM) | M_IHARD;
 
       crc_write(out, &mode, sizeof(mode));
       write_name(out, name);
