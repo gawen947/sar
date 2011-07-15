@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 13:43:06 gawen>
+   Time-stamp: <2011-07-15 14:07:42 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -584,6 +584,10 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
+
+    if(A_HAS_CRC(out))
+      size += sizeof(out->crc);
+
     lseek(out->fd, size, SEEK_CUR);
     return;
   }
@@ -618,8 +622,12 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
 static void read_dir(struct sar_file *out, mode_t mode)
 {
-  if(out->list_only)
+  if(out->list_only)  {
+    if(A_HAS_CRC(out))
+      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
     return;
+  }
+
 
   if(mkdir(out->wp, mode) < 0)
     warn("cannot create directory \"%s\"", out->wp);
@@ -632,6 +640,10 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
+
+    if(A_HAS_CRC(out))
+      size += sizeof(out->crc);
+
     lseek(out->fd, size, SEEK_CUR);
     return;
   }
@@ -649,8 +661,11 @@ static void read_link(struct sar_file *out, mode_t mode)
 
 static void read_fifo(struct sar_file *out, mode_t mode)
 {
-  if(out->list_only)
+  if(out->list_only)  {
+    if(A_HAS_CRC(out))
+      lseek(out->fd, sizeof(out->crc), SEEK_CUR);
     return;
+  }
 
   if(mkfifo(out->wp, mode) < 0)
     warn("cannot create fifo \"%s\"", out->wp);
@@ -661,7 +676,10 @@ static void read_device(struct sar_file *out, mode_t mode)
   uint64_t dev;
 
   if(out->list_only) {
-    lseek(out->fd, sizeof(dev), SEEK_CUR);
+    if(A_HAS_CRC(out))
+      lseek(out->fd, sizeof(dev) + sizeof(out->crc), SEEK_CUR);
+    else
+      lseek(out->fd, sizeof(dev), SEEK_CUR);
     return;
   }
 
@@ -680,6 +698,10 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 
   if(out->list_only) {
     xxread(out->fd, &size, sizeof(size));
+
+    if(A_HAS_CRC(out))
+      size += sizeof(out->crc);
+
     lseek(out->fd, size, SEEK_CUR);
     return;
   }
@@ -889,5 +911,5 @@ void sar_info(struct sar_file *out)
          S_BOOLEAN(A_HAS_CRC(out)),
          S_BOOLEAN(A_HAS_32ID(out)),
          S_BOOLEAN(A_HAS_64TIME(out)),
-         S_BOOLEAN(A_HAS_MTIME(out)));
+         S_BOOLEAN(A_HAS_NTIME(out)));
 }
