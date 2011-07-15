@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-15 10:46:09 gawen>
+   Time-stamp: <2011-07-15 22:55:14 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -112,6 +112,38 @@ static void help(const struct option *opts, const char *prog_name)
   }
 }
 
+static void except_archive(int argc, int optind, char *argv[],
+                           struct opts_val *val)
+{
+  if(val->use_file) {
+    if(argc - optind != 1)
+      errx(EXIT_FAILURE, "except archive name");
+    val->file = argv[optind];
+  }
+  else if(argc - optind)
+    errx(EXIT_FAILURE, "except no arguments");
+  else
+    val->file = NULL;
+}
+
+static void except_more(int argc, int optind, char *argv[],
+                        struct opts_val *val)
+{
+  if(val->use_file) {
+    if(argc - optind != 2)
+      errx(EXIT_FAILURE, "except archive name and a path to archive");
+    val->file   = argv[optind++];
+    val->source = argv[optind];
+  }
+  else if(argc - optind != 1)
+    errx(EXIT_FAILURE, "except a path to archive");
+  else {
+    val->file   = NULL;
+    val->source = argv[optind];
+  }
+}
+
+
 static void cmdline(int argc, char *argv[], struct opts_val *val)
 {
   int exit_status = EXIT_FAILURE;
@@ -163,28 +195,18 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->use_file = true;
       break;
     case 'C':
-      if(val->mode != MD_CREATE)
-        errx(EXIT_FAILURE, "%c should be used with 'create' mode", c);
       val->crc = true;
       break;
     case 'U':
-      if(val->mode != MD_CREATE)
-        errx(EXIT_FAILURE, "%c should be used with 'create' mode", c);
       val->wide_id = true;
       break;
     case 'T':
-      if(val->mode != MD_CREATE)
-        errx(EXIT_FAILURE, "%c should be used with 'create' mode", c);
       val->wide_stamp = true;
       break;
     case 'M':
-      if(val->mode != MD_CREATE)
-        errx(EXIT_FAILURE, "%c should be used with 'create' mode", c);
       val->nano_time = true;
       break;
     case 'w':
-      if(val->mode != MD_CREATE)
-        errx(EXIT_FAILURE, "%c should be used with 'create' mode", c);
       val->crc        = true;
       val->wide_id    = true;
       val->wide_stamp = true;
@@ -204,10 +226,8 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   /* consider remaining arguments */
   switch(val->mode) {
   case(MD_NONE):
-    if(argc - optind)
-      errx(EXIT_FAILURE, "nothing to do but arguments left");
-    verbose(2, val->verbose, "doing nothing");
-    exit(EXIT_SUCCESS);
+    errx(EXIT_SUCCESS, "You must specify one of the 'cxti' options\n"
+         "Try '%s --help'", pgn);
   case(MD_INFORMATION):
     if(val->use_file) {
       if(argc - optind != 1)
@@ -220,41 +240,12 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->file = NULL;
     break;
   case(MD_CREATE):
-    if(val->use_file) {
-      if(argc - optind != 2)
-        errx(EXIT_FAILURE, "except archive name and a path to archive");
-      val->file   = argv[optind++];
-      val->source = argv[optind];
-    }
-    else if(argc - optind != 1)
-      errx(EXIT_FAILURE, "except a path to archive");
-    else {
-      val->file   = NULL;
-      val->source = argv[optind];
-    }
+    except_more(argc, optind, argv, val);
     break;
   case(MD_LIST):
-    if(val->use_file) {
-        if(argc - optind != 1)
-          errx(EXIT_FAILURE, "except archive name");
-        val->file = argv[optind];
-    }
-    else if(argc - optind)
-      errx(EXIT_FAILURE, "except no arguments");
-    else
-      val->file = NULL;
-    break;
   case(MD_EXTRACT):
-    if(val->use_file) {
-      if(argc - optind != 1)
-        errx(EXIT_FAILURE, "except archive name");
-      val->file = argv[optind];
-    }
-    else if(argc - optind)
-      errx(EXIT_FAILURE, "except no arguments");
-    else
-      val->file = NULL;
-      break;
+    except_archive(argc, optind, argv, val);
+    break;
   }
 
 #ifndef DISABLE_EGGS
@@ -277,8 +268,8 @@ int main(int argc, char *argv[])
     sar_info(f);
     break;
   case(MD_CREATE):
-    f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.nano_time,
-                  val.crc, val.verbose);
+    f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.crc,
+                  val.nano_time, val.verbose);
     sar_add(f, val.source);
     break;
   case(MD_EXTRACT):

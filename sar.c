@@ -81,7 +81,7 @@ struct sar_file * sar_creat(const char *path,
                             bool use_32id,
                             bool use_64time,
                             bool use_crc,
-                            bool use_mtime,
+                            bool use_ntime,
                             unsigned int verbose)
 {
   uint32_t magik = MAGIK;
@@ -97,7 +97,7 @@ struct sar_file * sar_creat(const char *path,
     out->flags |= A_I64TIME;
   if(use_crc)
     out->flags |= A_ICRC;
-  if(use_mtime)
+  if(use_ntime)
     out->flags |= A_INTIME;
 
 #ifndef DISABLE_TIME_WIDTH_CHECK

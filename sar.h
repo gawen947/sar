@@ -151,7 +151,7 @@ struct sar_file * sar_creat(const char *path,
                             bool use_32id,
                             bool use_64time,
                             bool use_crc,
-                            bool use_mtime,
+                            bool use_ntime,
                             unsigned int verbose);
 struct sar_file * sar_read(const char *path, unsigned int verbose);
 void sar_add(struct sar_file *out, const char *path);
