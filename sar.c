@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 10:44:23 gawen>
+   Time-stamp: <2011-07-15 12:58:09 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -333,9 +333,9 @@ static void show_file(const struct sar_file *out, const char *path, mode_t mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
                       time_t mtime, uint32_t crc)
 {
-  if(out->verbose > 2)
+  if(out->verbose >= 2)
     printf("%d %d/%d %d %d-%d %s\n", mode, uid, gid, size, atime, mtime, path);
-  else if(out->verbose > 1)
+  else if(out->verbose >= 1)
     printf("%s\n", path);
 }
 
