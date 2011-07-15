@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-15 13:06:42 gawen>
+   Time-stamp: <2011-07-15 13:17:17 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -352,12 +352,10 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   uint16_t mode;
 
 #ifndef DISABLE_PERMISSION_CHECK
-  int fd = open(out->wp, O_RDONLY);
-  if(fd < 0) {
+  if(access(out->wp, R_OK) < 0) {
     warn("could not open \"%s\"", out->wp);
     return -1;
   }
-  close(fd);
 #endif /* PERMISSION_CHECK */
 
   /* setup crc and we don't care if we will compute it or not */
