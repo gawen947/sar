@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-16 03:14:55 gawen>
+   Time-stamp: <2011-07-16 19:10:45 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/wait.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <dirent.h>
@@ -79,6 +80,7 @@ static void show_file(const struct sar_file *out, const char *path,
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
 struct sar_file * sar_creat(const char *path,
+                            const char *compress,
                             bool use_32id,
                             bool use_64time,
                             bool use_crc,
@@ -117,6 +119,30 @@ struct sar_file * sar_creat(const char *path,
       err(EXIT_FAILURE, "could not open file \"%s\"", path);
   }
 
+  if(compress) {
+    int fd[2];
+    pid_t pid;
+
+    xpipe(fd);
+    pid = xfork();
+
+    if(!pid) /* child */ {
+      close(fd[1]);
+
+      xdup2(fd[0], STDIN_FILENO);
+      xdup2(out->fd, STDOUT_FILENO);
+
+      close(fd[0]);
+      close(out->fd);
+
+      execlp(compress, compress, NULL);
+      err(EXIT_FAILURE, "cannot execute \"%s\"", compress);
+    }
+
+    close(fd[0]);
+    out->fd = fd[1];
+  }
+
   /* write magik number and flags */
   xwrite(out->fd, &magik, sizeof(magik));
   xwrite(out->fd, &out->flags, sizeof(out->flags));
@@ -133,6 +159,13 @@ void sar_close(struct sar_file *file)
   assert(file);
   assert(file->fd);
   assert(!file->wp);
+
+  int status = 0;
+
+  wait(&status);
+
+  if(status)
+    errx(EXIT_FAILURE, "failed to compress");
 
   close(file->fd);
 }
@@ -704,7 +737,9 @@ static void rec_add(struct sar_file *out, const char *node)
 }
 
 /* open an archive for reading */
-struct sar_file * sar_read(const char *path, unsigned int verbose)
+struct sar_file * sar_read(const char *path,
+                           const char *compress,
+                           unsigned int verbose)
 {
   uint32_t magik;
 
@@ -719,6 +754,30 @@ struct sar_file * sar_read(const char *path, unsigned int verbose)
 
     if(out->fd < 0)
       err(EXIT_FAILURE, "could not open file \"%s\"", path);
+  }
+
+  if(compress) {
+    int fd[2];
+    pid_t pid;
+
+    xpipe(fd);
+    pid = xfork();
+
+    if(!pid) /* child */ {
+      close(fd[0]);
+
+      xdup2(out->fd, STDIN_FILENO);
+      xdup2(fd[1], STDOUT_FILENO);
+
+      close(out->fd);
+      close(fd[1]);
+
+      execlp(compress, compress, "-d", NULL);
+      err(EXIT_FAILURE, "cannot execute \"%s\"", compress);
+    }
+
+    close(fd[1]);
+    out->fd = fd[0];
   }
 
   /* check magik number */

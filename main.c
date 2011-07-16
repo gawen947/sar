@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 15:49:16 gawen>
+   Time-stamp: <2011-07-16 19:18:04 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -50,9 +50,9 @@ enum mode { MD_NONE = 0,
             MD_LIST };
 
 struct opts_name {
-  const char *help;
-  const char *name_long;
   char name_short;
+  const char *name_long;
+  const char *help;
 };
 
 struct opts_val {
@@ -65,6 +65,7 @@ struct opts_val {
   bool wide_stamp;
   bool nano_time;
 
+  const char *compress;
   const char *file;
   const char *source;
 };
@@ -159,6 +160,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 {
   int exit_status = EXIT_FAILURE;
   enum opt { OPT_CAP,
+             OPT_COMPRESS,
              OPT_VERSION     = 'V',
              OPT_HELP        = 'h',
              OPT_VERBOSE     = 'v',
@@ -174,21 +176,25 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
              OPT_WIDE        = 'w' };
 
   struct opts_name names[] = {
-    { "Print version information.", "version", 'V' },
-    { "Print this message", "help", 'h' },
-    { "Be verbose (may be used multiple times)", "verbose", 'v' },
-    { "Checkup capabilities", "cap", 0 },
-    { "Display basic informations about an archive", "information", 'i' },
-    { "Create a new archive", "create", 'c' },
-    { "Extract all files from an archive", "extract", 'x' },
-    { "List all files in an archive", "list", 't' },
-    { "Use a file instead of standard input/output", "file", 'f' },
-    { "Add integrity checks to each file in the archive", "crc", 'C' },
-    { "Use wider user/group id", "wide-id", 'U' },
-    { "Use wider timestamp (avoid year 1901/2038 problem)", "wide-time", 'T' },
-    { "Use more precise timestamps (upto nanoseconds)", "nano-time", 'N' },
-    { "Equivalent to -CUTN", "wide", 'w' },
-    { NULL, NULL, 0 }
+    { 'V', "version",     "Print version information."  },
+    { 'h', "help",        "Print this message" },
+    { 'v', "verbose",     "Be verbose (may be used multiple times)" },
+    { 0  , "cap",         "Checkup capabilities" },
+    { 0  , "compress",    "Compress using the specified executable" },
+    { 'z', "gzip",        "Alias for '--compress gzip'" },
+    { 'j', "bzip2",       "Alias for '--compress bzip2'" },
+    { 'J', "xz",          "Alias for '--compress xz'" },
+    { 'i', "information", "Display basic informations about an archive" },
+    { 'c', "create",      "Create a new archive" },
+    { 'x', "extract",     "Extract all files from an archive" },
+    { 't',  "list",       "List all files in an archive" },
+    { 'f',  "file",       "Use a file instead of standard input/output" },
+    { 'C',  "crc",        "Add integrity checks to each file in the archive" },
+    { 'U',  "wide-id",    "Use wider user/group id" },
+    { 'T',  "wide-time",  "Use wider timestamp (avoid year 1901/2038 problem)"},
+    { 'N',  "nano-time",  "Use more precise timestamps (upto nanoseconds)" },
+    { 'w',  "wide",       "Equivalent to -CUTN" },
+    { 0, NULL, NULL }
   };
 
   struct option opts[] = {
@@ -196,6 +202,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "help", no_argument, NULL, OPT_HELP },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "cap", no_argument, NULL, OPT_CAP },
+    { "compress", required_argument, NULL, OPT_COMPRESS },
     { "information", no_argument, NULL, OPT_INFORMATION },
     { "create", no_argument, NULL, OPT_CREATE },
     { "extract", no_argument, NULL, OPT_EXTRACT },
@@ -222,6 +229,9 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     switch(c) {
     case OPT_VERBOSE:
       val->verbose++;
+      break;
+    case OPT_COMPRESS:
+      val->compress = optarg;
       break;
     case OPT_INFORMATION:
       val->mode = MD_INFORMATION;
@@ -295,6 +305,11 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     break;
   }
 
+  if((val->crc || val->wide_id || val->wide_stamp || val->nano_time) &&
+     !(val->mode == MD_CREATE))
+    errx(EXIT_FAILURE, "Options 'CUTMw' are only availables with 'c' option\n"
+         "Try '%s --help'", pgn);
+
 #ifndef DISABLE_EGGS
     q0(val->verbose);
 #endif /* EGGS */
@@ -311,20 +326,25 @@ int main(int argc, char *argv[])
   case(MD_NONE):
     break;
   case(MD_INFORMATION):
-    f = sar_read(val.file, val.verbose);
+    f = sar_read(val.file, val.compress, val.verbose);
     sar_info(f);
     break;
   case(MD_CREATE):
-    f = sar_creat(val.file, val.wide_id, val.wide_stamp, val.crc,
-                  val.nano_time, val.verbose);
+    f = sar_creat(val.file,
+                  val.compress,
+                  val.wide_id,
+                  val.wide_stamp,
+                  val.crc,
+                  val.nano_time,
+                  val.verbose);
     sar_add(f, val.source);
     break;
   case(MD_EXTRACT):
-    f = sar_read(val.file, val.verbose);
+    f = sar_read(val.file, val.compress, val.verbose);
     sar_extract(f);
     break;
   case(MD_LIST):
-    f = sar_read(val.file, val.verbose);
+    f = sar_read(val.file, val.compress, val.verbose);
     sar_list(f);
     break;
   }

@@ -54,6 +54,9 @@ char * readlink_malloc_n(const char *filename, ssize_t *n);
 size_t n_strncpy(char *dest, const char *src, size_t n);
 char * strndup(const char *s, size_t n);
 
+int xfork();
+int xpipe(int pipefd[2]);
+int xdup2(int oldfd, int newfd);
 void * xmalloc(size_t size);
 void * xrealloc(void *ptr, size_t size);
 ssize_t xwrite(int fd, const void *buf, size_t count);

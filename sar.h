@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-15 19:18:27 gawen>
+   Time-stamp: <2011-07-16 19:11:14 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -55,25 +55,23 @@
 #define MAGIK      (0x00524153 | MAGIK_VERSION)
 
 struct sar_file {
-  int fd;          /* file descriptor of the archive */
-  uint8_t flags;   /* flags of this archive */
-  uint8_t version; /* version of sar archive */
+  int fd;           /* file descriptor of the archive */
+  uint8_t flags;    /* flags of this archive */
+  uint8_t version;  /* version of sar archive */
+
+  unsigned int verbose; /* verbose level */
+  bool list_only;       /* do not extract file skip them instead */
 
   char *wp;         /* working path */
   size_t wp_sz;     /* working path size */
   size_t wp_idx;    /* working path index */
   size_t wp_max;    /* working path max size */
+  uint32_t crc;     /* current crc */
   char *link;       /* symlink or hardlink destination */
   off_t size;       /* size of a node */
 
   struct sar_hardlink *hl_tbl; /* hard link table */
   size_t hl_tbl_sz;
-
-  uint32_t crc;    /* current crc */
-
-  unsigned int verbose; /* verbose level */
-
-  bool list_only;  /* do not extract file skip them instead */
 };
 
 struct sar_hardlink {
@@ -148,12 +146,15 @@ enum size    { HL_TBL_SZ = 1024,
 #define DATE_FORMAT "%a, %d %b %Y %T %z" /* RFC 2822-compliant date format */
 
 struct sar_file * sar_creat(const char *path,
+                            const char *compress,
                             bool use_32id,
                             bool use_64time,
                             bool use_crc,
                             bool use_ntime,
                             unsigned int verbose);
-struct sar_file * sar_read(const char *path, unsigned int verbose);
+struct sar_file * sar_read(const char *path,
+                           const char *compress,
+                           unsigned int verbose);
 void sar_add(struct sar_file *out, const char *path);
 void sar_extract(struct sar_file *out);
 void sar_list(struct sar_file *out);

@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-07-15 16:54:17 gawen>
+   Time-stamp: <2011-07-16 17:06:10 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -39,6 +39,13 @@
 
 #include "common.h"
 
+#define SAFE_CALL0(name, erron, msg, ret)       \
+  ret x ## name () {                            \
+    register ret t = name ();                   \
+    if(t erron)                                 \
+      err(EXIT_FAILURE, msg);                   \
+    return t; }
+
 #define SAFE_CALL1(name, erron, msg, ret, type) \
   ret x ## name (type arg) {                    \
     register ret t = name (arg);                \
@@ -60,16 +67,22 @@
       err(EXIT_FAILURE, msg);                                  \
     return t; }
 
+SAFE_CALL0(fork, < 0, "cannot fork", int)
+
+SAFE_CALL1(pipe, < 0, "cannot create pipe", int, int *)
 SAFE_CALL1(malloc, == NULL, "out of memory", void *, size_t)
+
 SAFE_CALL2(realloc, == NULL, "out of memory", void *, void *, size_t)
-SAFE_CALL3(read, < 0, "IO read error", ssize_t, int, void *, size_t)
-SAFE_CALL3(write, <= 0, "IO write error", ssize_t, int, const void *, size_t)
 SAFE_CALL2(stat, < 0, "IO stat error", int, const char *, struct stat *)
-SAFE_CALL3(chown, < 0, "IO chown error", int, const char *, uid_t, gid_t)
+SAFE_CALL2(dup2, < 0, "cannot duplicate file descriptors", int, int, int)
 SAFE_CALL2(readlink_malloc_n, == NULL, "IO readlink error", char *,
            const char *, ssize_t *)
 SAFE_CALL2(utime, < 0, "IO chattr error", int, const char *,
            const struct utimbuf *)
+
+SAFE_CALL3(read, < 0, "IO read error", ssize_t, int, void *, size_t)
+SAFE_CALL3(write, <= 0, "IO write error", ssize_t, int, const void *, size_t)
+SAFE_CALL3(chown, < 0, "IO chown error", int, const char *, uid_t, gid_t)
 
 char * readlink_malloc_n(const char *filename, ssize_t *n)
 {
