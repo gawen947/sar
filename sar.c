@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-16 02:21:06 gawen>
+   Time-stamp: <2011-07-16 03:14:55 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -146,6 +146,7 @@ void sar_add(struct sar_file *out, const char *path)
 
   char *s, *npath;
   size_t nb_nodes = 0;
+  size_t i;
 
   /* create hard link table */
   out->hl_tbl    = xmalloc(HL_TBL_SZ * sizeof(struct sar_hardlink));
@@ -157,6 +158,11 @@ void sar_add(struct sar_file *out, const char *path)
   out->wp     = xmalloc(WP_MAX);
   out->wp_idx = n_strncpy(out->wp, path, WP_MAX);
   npath       = out->wp;
+
+  /* remove trailing / */
+  for(i = out->wp_idx - 1 ; out->wp[i] == '/' ; i--)
+    out->wp[i] = '\0';
+  out->wp_idx = i + 1;
 
   if(out->wp_idx >= WP_MAX)
     errx(EXIT_FAILURE, "path too long");
@@ -176,13 +182,6 @@ NEXT_NODE:
       *s = '\0';
 
       node = strdup(npath);
-
-      if(*(s + 1) == '\0')  {
-        out->wp_idx--;
-        rec_add(out, node);
-
-        goto CLEAN;
-      }
 
       add_node(out, NULL, node);
 
