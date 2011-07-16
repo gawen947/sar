@@ -1,0 +1,14 @@
+Simple ARchive
+==============
+
+Supports: 
+ - integrity checking of files in the archive
+ - compression through utilities : compress, gzip, bzip2, xz, lzma, lzip, lzop
+ - standard Unix file types
+ - hard links detection
+ - small headers
+
+Does not support:
+ - adding new files to the archive
+ - rapid extraction of a file or more
+ - multithreading

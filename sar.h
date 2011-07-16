@@ -45,7 +45,7 @@
 #ifndef COMMIT
 # define PACKAGE_VERSION VERSION
 #else
-# define PACKAGE_VERSION VERSION " (commit:" COMMIT ")" /* add git commit */
+# define PACKAGE_VERSION VERSION " (commit:" PARTIAL_COMMIT ")" /* add git commit */
 #endif /* COMMIT */
 
 #define MAGIK_VERSION 0          /* simple archive file format version

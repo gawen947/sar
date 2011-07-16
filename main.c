@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 20:17:02 gawen>
+   Time-stamp: <2011-07-16 22:38:14 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -72,7 +72,7 @@ struct opts_val {
 
 static void version()
 {
-  printf(PACKAGE "-" PACKAGE_VERSION "\n");
+  printf(PACKAGE " " PACKAGE_VERSION "\n");
   exit(EXIT_SUCCESS);
 }
 
@@ -164,6 +164,9 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
              OPT_LZMA,
              OPT_LZIP,
              OPT_LZOP,
+#ifdef COMMIT
+             OPT_COMMIT,
+#endif /* COMMIT */
              OPT_LZW         = 'Z',
              OPT_GZIP        = 'z',
              OPT_BZIP2       = 'j',
@@ -183,7 +186,10 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
              OPT_WIDE        = 'w' };
 
   struct opts_name names[] = {
-    { 'V', "version",     "Print version information."  },
+    { 'V', "version",     "Print version information" },
+#ifdef COMMIT
+    { 0  , "commit",      "Display commit information" },
+#endif /* COMMIT */
     { 'h', "help",        "Print this message" },
     { 'v', "verbose",     "Be verbose (may be used multiple times)" },
     { 0  , "cap",         "Checkup capabilities" },
@@ -210,6 +216,9 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 
   struct option opts[] = {
     { "version", no_argument, NULL, OPT_VERSION },
+#ifdef COMMIT
+    { "commit", no_argument, NULL, OPT_COMMIT },
+#endif /* COMMIT */
     { "help", no_argument, NULL, OPT_HELP },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "cap", no_argument, NULL, OPT_CAP },
@@ -307,6 +316,11 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     case OPT_CAP:
       checkup_cap();
       exit(EXIT_SUCCESS);
+#ifdef COMMIT
+    case OPT_COMMIT:
+      printf("Commit id SHA1 : " COMMIT "\n");
+      exit(EXIT_SUCCESS);
+#endif /* COMMIT */
     case OPT_VERSION:
       version();
       exit(EXIT_SUCCESS);
