@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 00:43:54 gawen>
+   Time-stamp: <2011-07-16 15:49:16 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -49,6 +49,12 @@ enum mode { MD_NONE = 0,
             MD_EXTRACT,
             MD_LIST };
 
+struct opts_name {
+  const char *help;
+  const char *name_long;
+  char name_short;
+};
+
 struct opts_val {
   unsigned int verbose;
   enum mode mode;
@@ -69,49 +75,33 @@ static void version()
   exit(EXIT_SUCCESS);
 }
 
-static void help(const struct option *opts, const char *prog_name)
+static void help(const struct opts_name *names, const char *prog_name)
 {
-  const struct option *opt;
-  const char **hlp;
+  const struct opts_name *opt;
   int size;
   int max = 0;
 
-  /* help messages */
-  const char *opts_help[] = {
-    "Print version information",                             /* -V */
-    "Print this message",                                    /* -h */
-    "Be verbose (may be used multiple times)",               /* -v */
-    "Checkup capabilities",                                  /* -k */
-    "Display basic informations about an archive",           /* -i */
-    "Create a new archive",                                  /* -c */
-    "Extract all files from an archive",                     /* -x */
-    "List all files in an archive",                          /* -t */
-    "Use a file instead of standard input/output",           /* -f */
-    "Add integrity checks to each file in the archive",      /* -C */
-    "Use wider user/group id",                               /* -U */
-    "Use wider timestamp (avoid year 1901/2038 problem)",    /* -T */
-    "Use more precise timestamps (upto nanoseconds)",        /* -M */
-    "Equivalent to -CUTN"                                    /* -w */
-  };
-
-  fprintf(stderr, "Usage: %s [OPTIONS]\n", prog_name);
+  fprintf(stderr, "Usage: %s [OPTIONS] [ARCHIVE] [FILES]\n", prog_name);
 
   /* maximum option name size for padding */
-  for(opt = opts ; opt->name ; opt++) {
-    size = strlen(opt->name);
+  for(opt = names ; opt->name_long ; opt++) {
+    size = strlen(opt->name_long);
     if(size > max)
       max = size;
   }
 
   /* print options and help messages */
-  for(opt = opts, hlp = opts_help ; opt->name ; opt++, hlp++) {
-    fprintf(stderr, "  -%c, --%s", opt->val, opt->name);
+  for(opt = names ; opt->name_long ; opt++) {
+    if(opt->name_short != 0)
+      fprintf(stderr, "  -%c, --%s", opt->name_short, opt->name_long);
+    else
+      fprintf(stderr, "      --%s", opt->name_long);
 
     /* padding */
-    size = strlen(opt->name);
+    size = strlen(opt->name_long);
     for(; size <= max ; size++)
       fputc(' ', stderr);
-    fprintf(stderr, "%s\n", *hlp);
+    fprintf(stderr, "%s\n", opt->help);
   }
 }
 
@@ -165,26 +155,57 @@ static void except_more(int argc, int optind, char *argv[],
   }
 }
 
-
 static void cmdline(int argc, char *argv[], struct opts_val *val)
 {
   int exit_status = EXIT_FAILURE;
+  enum opt { OPT_CAP,
+             OPT_VERSION     = 'V',
+             OPT_HELP        = 'h',
+             OPT_VERBOSE     = 'v',
+             OPT_INFORMATION = 'i',
+             OPT_CREATE      = 'c',
+             OPT_EXTRACT     = 'x',
+             OPT_LIST        = 't',
+             OPT_FILE        = 'f',
+             OPT_CRC         = 'C',
+             OPT_WIDE_ID     = 'U',
+             OPT_WIDE_TIME   = 'T',
+             OPT_NANO_TIME   = 'N',
+             OPT_WIDE        = 'w' };
+
+  struct opts_name names[] = {
+    { "Print version information.", "version", 'V' },
+    { "Print this message", "help", 'h' },
+    { "Be verbose (may be used multiple times)", "verbose", 'v' },
+    { "Checkup capabilities", "cap", 0 },
+    { "Display basic informations about an archive", "information", 'i' },
+    { "Create a new archive", "create", 'c' },
+    { "Extract all files from an archive", "extract", 'x' },
+    { "List all files in an archive", "list", 't' },
+    { "Use a file instead of standard input/output", "file", 'f' },
+    { "Add integrity checks to each file in the archive", "crc", 'C' },
+    { "Use wider user/group id", "wide-id", 'U' },
+    { "Use wider timestamp (avoid year 1901/2038 problem)", "wide-time", 'T' },
+    { "Use more precise timestamps (upto nanoseconds)", "nano-time", 'N' },
+    { "Equivalent to -CUTN", "wide", 'w' },
+    { NULL, NULL, 0 }
+  };
 
   struct option opts[] = {
-    { "version", no_argument, NULL, 'V' },
-    { "help", no_argument, NULL, 'h' },
-    { "verbose", no_argument, NULL, 'v' },
-    { "cap", no_argument, NULL, 'k' },
-    { "information", no_argument, NULL, 'i' },
-    { "create", no_argument, NULL, 'c' },
-    { "extract", no_argument, NULL, 'x' },
-    { "list", no_argument, NULL, 't' },
-    { "file", no_argument, NULL, 'f' },
-    { "crc", no_argument, NULL, 'C' },
-    { "wide-id", no_argument, NULL, 'U' },
-    { "wide-time", no_argument, NULL, 'T' },
-    { "nano-time", no_argument, NULL, 'N' },
-    { "wide", no_argument, NULL, 'w' },
+    { "version", no_argument, NULL, OPT_VERSION },
+    { "help", no_argument, NULL, OPT_HELP },
+    { "verbose", no_argument, NULL, OPT_VERBOSE },
+    { "cap", no_argument, NULL, OPT_CAP },
+    { "information", no_argument, NULL, OPT_INFORMATION },
+    { "create", no_argument, NULL, OPT_CREATE },
+    { "extract", no_argument, NULL, OPT_EXTRACT },
+    { "list", no_argument, NULL, OPT_LIST },
+    { "file", no_argument, NULL, OPT_FILE },
+    { "crc", no_argument, NULL, OPT_CRC },
+    { "wide-id", no_argument, NULL, OPT_WIDE_ID },
+    { "wide-time", no_argument, NULL, OPT_WIDE_TIME },
+    { "nano-time", no_argument, NULL, OPT_NANO_TIME },
+    { "wide", no_argument, NULL, OPT_WIDE },
     { NULL, 0, NULL, 0 }
   };
 
@@ -193,58 +214,58 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   pgn = pgn ? (pgn + 1) : argv[0];
 
   while(1) {
-    int c = getopt_long(argc, argv, "VhvkicxtfCUTNw", opts, NULL);
+    int c = getopt_long(argc, argv, "VhvicxtfCUTNw", opts, NULL);
 
     if(c == -1)
       break;
 
     switch(c) {
-    case 'v':
+    case OPT_VERBOSE:
       val->verbose++;
       break;
-    case 'i':
+    case OPT_INFORMATION:
       val->mode = MD_INFORMATION;
       break;
-    case 'c':
+    case OPT_CREATE:
       val->mode = MD_CREATE;
       break;
-    case 'x':
+    case OPT_EXTRACT:
       val->mode = MD_EXTRACT;
       break;
-    case 't':
+    case OPT_LIST:
       val->mode = MD_LIST;
       break;
-    case 'f':
+    case OPT_FILE:
       val->use_file = true;
       break;
-    case 'C':
+    case OPT_CRC:
       val->crc = true;
       break;
-    case 'U':
+    case OPT_WIDE_ID:
       val->wide_id = true;
       break;
-    case 'T':
+    case OPT_WIDE_TIME:
       val->wide_stamp = true;
       break;
-    case 'M':
+    case OPT_NANO_TIME:
       val->nano_time = true;
       break;
-    case 'w':
+    case OPT_WIDE:
       val->crc        = true;
       val->wide_id    = true;
       val->wide_stamp = true;
       val->nano_time = true;
       break;
-    case 'k':
+    case OPT_CAP:
       checkup_cap();
       exit(EXIT_SUCCESS);
-    case 'V':
+    case OPT_VERSION:
       version();
       exit(EXIT_SUCCESS);
-    case 'h':
+    case OPT_HELP:
       exit_status = EXIT_SUCCESS;
     default:
-      help(opts, pgn);
+      help(names, pgn);
       exit(exit_status);
     }
   }
