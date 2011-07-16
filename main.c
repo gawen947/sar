@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 19:40:39 gawen>
+   Time-stamp: <2011-07-16 19:50:32 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -303,7 +303,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       val->crc        = true;
       val->wide_id    = true;
       val->wide_stamp = true;
-      val->nano_time = true;
+      val->nano_time  = true;
       break;
     case OPT_CAP:
       checkup_cap();
@@ -346,7 +346,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 
   if((val->crc || val->wide_id || val->wide_stamp || val->nano_time) &&
      !(val->mode == MD_CREATE))
-    errx(EXIT_FAILURE, "Options 'CUTMw' are only availables with 'c' option\n"
+    errx(EXIT_FAILURE, "Options 'CUTNw' are only availables with 'c' option\n"
          "Try '%s --help'", pgn);
 
 #ifndef DISABLE_EGGS
