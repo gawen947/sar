@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 19:18:04 gawen>
+   Time-stamp: <2011-07-16 19:40:39 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -161,6 +161,13 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   int exit_status = EXIT_FAILURE;
   enum opt { OPT_CAP,
              OPT_COMPRESS,
+             OPT_LZMA,
+             OPT_LZIP,
+             OPT_LZOP,
+             OPT_LZW         = 'Z',
+             OPT_GZIP        = 'z',
+             OPT_BZIP2       = 'j',
+             OPT_XZ          = 'J',
              OPT_VERSION     = 'V',
              OPT_HELP        = 'h',
              OPT_VERBOSE     = 'v',
@@ -181,9 +188,13 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { 'v', "verbose",     "Be verbose (may be used multiple times)" },
     { 0  , "cap",         "Checkup capabilities" },
     { 0  , "compress",    "Compress using the specified executable" },
+    { 'Z', "lzw",         "Alias for '--compress compress'" },
     { 'z', "gzip",        "Alias for '--compress gzip'" },
     { 'j', "bzip2",       "Alias for '--compress bzip2'" },
     { 'J', "xz",          "Alias for '--compress xz'" },
+    { 0  , "lzma",        "Alias for '--compress lzma'" },
+    { 0  , "lzip",        "Alias for '--compress lzip'" },
+    { 0  , "lzop",        "Alias for '--compress lzop'" },
     { 'i', "information", "Display basic informations about an archive" },
     { 'c', "create",      "Create a new archive" },
     { 'x', "extract",     "Extract all files from an archive" },
@@ -203,6 +214,13 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "cap", no_argument, NULL, OPT_CAP },
     { "compress", required_argument, NULL, OPT_COMPRESS },
+    { "lzw", no_argument, NULL, OPT_LZW },
+    { "gzip", no_argument, NULL, OPT_GZIP },
+    { "bzip2", no_argument, NULL, OPT_BZIP2 },
+    { "xz", no_argument, NULL, OPT_XZ },
+    { "lzma", no_argument, NULL, OPT_LZMA },
+    { "lzip", no_argument, NULL, OPT_LZIP },
+    { "lzop", no_argument, NULL, OPT_LZOP },
     { "information", no_argument, NULL, OPT_INFORMATION },
     { "create", no_argument, NULL, OPT_CREATE },
     { "extract", no_argument, NULL, OPT_EXTRACT },
@@ -221,7 +239,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   pgn = pgn ? (pgn + 1) : argv[0];
 
   while(1) {
-    int c = getopt_long(argc, argv, "VhvicxtfCUTNw", opts, NULL);
+    int c = getopt_long(argc, argv, "VhvZzjJicxtfCUTNw", opts, NULL);
 
     if(c == -1)
       break;
@@ -232,6 +250,27 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       break;
     case OPT_COMPRESS:
       val->compress = optarg;
+      break;
+    case OPT_GZIP:
+      val->compress = "gzip";
+      break;
+    case OPT_BZIP2:
+      val->compress = "bzip2";
+      break;
+    case OPT_XZ:
+      val->compress = "xz";
+      break;
+    case OPT_LZMA:
+      val->compress = "lzma";
+      break;
+    case OPT_LZIP:
+      val->compress = "lzip";
+      break;
+    case OPT_LZOP:
+      val->compress = "lzop";
+      break;
+    case OPT_LZW:
+      val->compress = "compress";
       break;
     case OPT_INFORMATION:
       val->mode = MD_INFORMATION;
