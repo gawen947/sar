@@ -10,5 +10,5 @@ Supports:
 
 Does not support:
  - adding new files to the archive
- - rapid extraction of a file or more
+ - rapid extraction of one file or more
  - multithreading
