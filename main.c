@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 20:02:55 gawen>
+   Time-stamp: <2011-07-16 20:17:02 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -60,10 +60,10 @@ struct opts_val {
   enum mode mode;
 
   bool use_file;
-  bool crc;
+  bool no_crc;
   bool wide_id;
   bool wide_stamp;
-  bool nano_time;
+  bool no_nano;
 
   const char *compress;
   const char *file;
@@ -176,10 +176,10 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
              OPT_EXTRACT     = 'x',
              OPT_LIST        = 't',
              OPT_FILE        = 'f',
-             OPT_CRC         = 'C',
+             OPT_NO_CRC      = 'C',
              OPT_WIDE_ID     = 'U',
              OPT_WIDE_TIME   = 'T',
-             OPT_NANO_TIME   = 'N',
+             OPT_NO_NANO     = 'N',
              OPT_WIDE        = 'w' };
 
   struct opts_name names[] = {
@@ -200,11 +200,11 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { 'x', "extract",     "Extract all files from an archive" },
     { 't',  "list",       "List all files in an archive" },
     { 'f',  "file",       "Use a file instead of standard input/output" },
-    { 'C',  "crc",        "Add integrity checks to each file in the archive" },
     { 'U',  "wide-id",    "Use wider user/group id" },
     { 'T',  "wide-time",  "Use wider timestamp (avoid year 1901/2038 problem)"},
-    { 'N',  "nano-time",  "Use more precise timestamps (upto nanoseconds)" },
-    { 'w',  "wide",       "Equivalent to -CUTN" },
+    { 'C',  "no-crc",     "Disable integrity checks" },
+    { 'N',  "no-nano",    "Disable timestamps precision (upto nanoseconds)" },
+    { 'w',  "wide",       "Equivalent to -TU" },
     { 0, NULL, NULL }
   };
 
@@ -226,10 +226,10 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "extract", no_argument, NULL, OPT_EXTRACT },
     { "list", no_argument, NULL, OPT_LIST },
     { "file", no_argument, NULL, OPT_FILE },
-    { "crc", no_argument, NULL, OPT_CRC },
+    { "no-crc", no_argument, NULL, OPT_NO_CRC },
     { "wide-id", no_argument, NULL, OPT_WIDE_ID },
     { "wide-time", no_argument, NULL, OPT_WIDE_TIME },
-    { "nano-time", no_argument, NULL, OPT_NANO_TIME },
+    { "no-nano", no_argument, NULL, OPT_NO_NANO },
     { "wide", no_argument, NULL, OPT_WIDE },
     { NULL, 0, NULL, 0 }
   };
@@ -288,8 +288,8 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     case OPT_FILE:
       val->use_file = true;
       break;
-    case OPT_CRC:
-      val->crc = true;
+    case OPT_NO_CRC:
+      val->no_crc = true;
       break;
     case OPT_WIDE_ID:
       val->wide_id = true;
@@ -297,14 +297,12 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     case OPT_WIDE_TIME:
       val->wide_stamp = true;
       break;
-    case OPT_NANO_TIME:
-      val->nano_time = true;
+    case OPT_NO_NANO:
+      val->no_nano    = true;
       break;
     case OPT_WIDE:
-      val->crc        = true;
       val->wide_id    = true;
       val->wide_stamp = true;
-      val->nano_time  = true;
       break;
     case OPT_CAP:
       checkup_cap();
@@ -345,7 +343,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     break;
   }
 
-  if((val->crc || val->wide_id || val->wide_stamp || val->nano_time) &&
+  if((val->no_crc || val->wide_id || val->wide_stamp || val->no_nano) &&
      !(val->mode == MD_CREATE))
     errx(EXIT_FAILURE, "Options 'CUTNw' are only availables with 'c' option\n"
          "Try '%s --help'", pgn);
@@ -374,8 +372,8 @@ int main(int argc, char *argv[])
                   val.compress,
                   val.wide_id,
                   val.wide_stamp,
-                  val.crc,
-                  val.nano_time,
+                  !val.no_crc,
+                  !val.no_nano,
                   val.verbose);
     sar_add(f, val.source);
     break;
