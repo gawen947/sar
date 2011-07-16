@@ -47,7 +47,7 @@
 #ifndef NDEBUG
 # define UNPTR(a) a = NULL
 #else
-# define UNPTR(a) void
+# define UNPTR(a)
 #endif
 
 char * readlink_malloc_n(const char *filename, ssize_t *n);

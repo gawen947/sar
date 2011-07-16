@@ -526,7 +526,7 @@ static void show_file(const struct sar_file *out, const char *path,
       printf("%d\t", gid);
 
     /* size */
-    printf("%ld\t", size);
+    printf("% 9ld\t", size);
 
     /* times */
     if(out->verbose >= 4) {

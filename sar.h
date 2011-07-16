@@ -143,7 +143,7 @@ enum size    { HL_TBL_SZ = 1024,
                IO_SZ     = 65536 };
 
 /* misc. */
-#define DATE_FORMAT "%a, %d %b %Y %T %z" /* RFC 2822-compliant date format */
+#define DATE_FORMAT "%d %b %Y %H:%M"
 
 struct sar_file * sar_creat(const char *path,
                             const char *compress,
