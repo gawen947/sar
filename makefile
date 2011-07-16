@@ -49,8 +49,8 @@ clean:
 	$(RM) sar
 
 install:
-	$(MKDIR) -p $(DESTDIR)/$(PREFIXDIR)/$(BINDIR)
-	$(INSTALL_PROGRAM) sar $(DESTDIR)/$(PREFIX)/$(BINDIR)
+	$(MKDIR) -p $(DESTDIR)/$(PREFIX)/$(BIN)
+	$(INSTALL_PROGRAM) sar $(DESTDIR)/$(PREFIX)/$(BIN)
 
 uninstall:
 	$(RM) $(DESTDIR)/$(PREFIX)/sar
