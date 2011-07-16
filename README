@@ -2,7 +2,7 @@ Simple ARchive
 ==============
 
 Supports: 
- - integrity checking of files in the archive
+ - file integrity check
  - compression through utilities : compress, gzip, bzip2, xz, lzma, lzip, lzop
  - standard Unix file types
  - hard links detection
