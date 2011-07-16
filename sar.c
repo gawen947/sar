@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-16 01:47:52 gawen>
+   Time-stamp: <2011-07-16 02:21:06 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -178,6 +178,7 @@ NEXT_NODE:
       node = strdup(npath);
 
       if(*(s + 1) == '\0')  {
+        out->wp_idx--;
         rec_add(out, node);
 
         goto CLEAN;
