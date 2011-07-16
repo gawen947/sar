@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-07-16 17:06:10 gawen>
+   Time-stamp: <2011-07-16 21:18:37 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -93,7 +93,7 @@ char * readlink_malloc_n(const char *filename, ssize_t *n)
 
   while (1) {
     buffer = (char *)xrealloc(buffer, size);
-    ssize_t nchars = readlink(filename, buffer, size);
+    ssize_t nchars = readlink(filename, buffer, size - 1);
 
     if(nchars < 0) {
       free (buffer);
@@ -102,6 +102,7 @@ char * readlink_malloc_n(const char *filename, ssize_t *n)
     }
     else if(nchars < size) {
       *n = nchars;
+      buffer[nchars] = '\0';
       return buffer;
     }
 

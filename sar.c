@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-16 19:10:45 gawen>
+   Time-stamp: <2011-07-16 22:26:43 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -326,6 +326,7 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
   ssize_t n;
   int fd = open(out->wp, O_RDONLY);
 
+  /* if it fails here the archive is screwed out */
   if(fd < 0)
     err(EXIT_FAILURE, "cannot open \"%s\"", out->wp);
 
@@ -342,20 +343,17 @@ static void write_link(struct sar_file *out, const struct stat *buf)
 {
   ssize_t n;
   uint16_t size;
-  char *ln = xreadlink_malloc_n(out->wp, &n);
 
-  if(!ln)
+  out->link = xreadlink_malloc_n(out->wp, &n);
+
+  /* if it fails here the archive is screwed out */
+  if(!out->link)
     err(EXIT_FAILURE, "cannot read \"%s\"", out->wp);
-
-  out->link = strndup(ln, n);
-  out->link[n] = '\0';
 
   size = n;
 
   crc_write(out, &size, sizeof(size));
-  crc_write(out, ln, n);
-
-  free(ln);
+  crc_write(out, out->link, n);
 }
 
 static void write_dev(struct sar_file *out, const struct stat *buf)
@@ -402,7 +400,6 @@ static void write_name(struct sar_file *out, const char *name)
   crc_write(out, &t_size, sizeof(t_size));
   crc_write(out, name, size);
 #endif /* NAME_WIDTH_CHECK */
-
 }
 
 static void show_file(const struct sar_file *out, const char *path,
@@ -847,7 +844,7 @@ static void read_dir(struct sar_file *out, mode_t mode)
 
 static void read_link(struct sar_file *out, mode_t mode)
 {
-  char path[WP_MAX];
+  char path[WP_MAX + 1];
   uint16_t size;
 
   /* read link length */
@@ -856,7 +853,10 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   /* endianess conversion should be done here for size */
 
+  if(size > WP_MAX)
+    errx(EXIT_FAILURE, "path size exceeded");
   xcrc_read(out, path, size);
+  path[size] = '\0';
 
   out->link = strdup(path);
   if(!out->list_only && symlink(path, out->wp) < 0)
@@ -890,7 +890,7 @@ static void read_device(struct sar_file *out, mode_t mode)
 
 static void read_hardlink(struct sar_file *out, mode_t mode)
 {
-  char path[WP_MAX];
+  char path[WP_MAX + 1];
   uint16_t size;
 
   /* read link length */
@@ -899,7 +899,10 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 
   /* endianess conversion should be done here for size */
 
+  if(size > WP_MAX)
+    errx(EXIT_FAILURE, "path size exceeded");
   xcrc_read(out, path, size);
+  path[size] = '\0';
 
   out->link = strdup(path);
   if(!out->list_only && link(path, out->wp) < 0)
@@ -912,7 +915,7 @@ static int rec_extract(struct sar_file *out, size_t idx)
   assert(out->fd);
   assert(out->wp);
 
-  char name[NODE_MAX];
+  char name[NODE_MAX + 1];
   time_t atime = 0;
   time_t mtime = 0;
   uid_t uid = 0;
@@ -1008,6 +1011,9 @@ static int rec_extract(struct sar_file *out, size_t idx)
 EXTRACT_NAME:
   /* extract name */
   xcrc_read(out, &size, sizeof(size));
+
+  if(size > NODE_MAX)
+    errx(EXIT_FAILURE, "node max size exceeded");
   xcrc_read(out, name, size);
 
 #ifndef DISABLE_WP_WIDTH_CHECK
