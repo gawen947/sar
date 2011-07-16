@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 19:50:32 gawen>
+   Time-stamp: <2011-07-16 20:02:55 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -283,6 +283,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       break;
     case OPT_LIST:
       val->mode = MD_LIST;
+      val->verbose++;
       break;
     case OPT_FILE:
       val->use_file = true;
