@@ -106,7 +106,7 @@ struct sar_file * sar_creat(const char *path,
 #ifndef DISABLE_TIME_WIDTH_CHECK
   /* avoid 1901/2038 bug */
   time_t now = time(NULL);
-  if((int32_t)now == now)
+  if((int32_t)now != now)
     out->flags |= A_I64TIME;
 #endif /* TIME_WIDTH_CHECK */
 
