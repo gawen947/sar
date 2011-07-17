@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-17 02:09:17 gawen>
+   Time-stamp: <2011-07-17 02:12:41 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -1074,7 +1074,7 @@ EXTRACT_NAME:
   /* change attributes */
 
   if(!out->list_only) {
-    chown(out->wp, uid, gid);
+    lchown(out->wp, uid, gid);
 
     if(A_HAS_NTIME(out)) {
       struct timespec times[2];
