@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-16 22:26:43 gawen>
+   Time-stamp: <2011-07-17 02:09:17 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -56,6 +56,7 @@ static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
 static void free_hardlinks(struct sar_file *out);
 static int add_node(struct sar_file *out, mode_t *mode, const char *name);
+static void reupdate_time(const struct sar_file *out, const struct stat *buf);
 static void rec_add(struct sar_file *out, const char *node);
 static int rec_extract(struct sar_file *out, size_t idx);
 static void write_regular(struct sar_file *out, const struct stat *buf);
@@ -559,6 +560,12 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   struct stat buf;
   uint16_t mode;
 
+  /* stat the file first to reupdate access time later */
+  if(lstat(out->wp, &buf) < 0) {
+    warn("could not stat \"%s\"", out->wp);
+    return -1;
+  }
+
 #ifndef DISABLE_PERMISSION_CHECK
   if(access(out->wp, R_OK) < 0) {
     warn("cannot open \"%s\"", out->wp);
@@ -570,12 +577,6 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
      care if we will compute it or not */
   out->crc  = 0;
   out->link = NULL;
-
-  /* stat the file */
-  if(lstat(out->wp, &buf) < 0) {
-    warn("could not stat \"%s\"", out->wp);
-    return -1;
-  }
 
   /* watch for hard link */
   if(buf.st_nlink >= 2 && !S_ISDIR(buf.st_mode)) {
@@ -669,19 +670,38 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   }
 
 CRC:
+  /* write crc if needed */
   if(A_HAS_CRC(out))
     xwrite(out->fd, &out->crc, sizeof(out->crc));
 
+  /* update remote mode */
   if(rmode)
     *rmode = buf.st_mode;
 
+  /* display file */
   show_file(out, out->wp, out->link, buf.st_mode, mode, buf.st_uid, buf.st_gid,
             buf.st_size, buf.st_atime, buf.st_mtime, out->crc,
             A_HAS_CRC(out));
   if(out->link)
     free(out->link);
 
+  /* reupdate access time */
+  reupdate_time(out, &buf);
+
   return 0;
+}
+
+static void reupdate_time(const struct sar_file *out, const struct stat *buf)
+{
+  struct timespec times[2];
+
+  times[0].tv_sec  = buf->st_atime;
+  times[0].tv_nsec = buf->st_atim.tv_nsec;
+
+  times[1].tv_sec  = buf->st_mtime;
+  times[1].tv_nsec = buf->st_mtim.tv_nsec;
+
+  utimensat(AT_FDCWD, out->wp, times, AT_SYMLINK_NOFOLLOW);
 }
 
 static void rec_add(struct sar_file *out, const char *node)
