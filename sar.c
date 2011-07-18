@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-17 02:17:09 gawen>
+   Time-stamp: <2011-07-18 14:04:04 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <endian.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <utime.h>
@@ -56,12 +57,14 @@ static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
 static void free_hardlinks(struct sar_file *out);
 static int add_node(struct sar_file *out, mode_t *mode, const char *name);
-static void reupdate_time(const struct sar_file *out, const struct stat *buf);
+static void reupdate_time(const struct sar_file *out);
 static void rec_add(struct sar_file *out, const char *node);
+static enum isclass get_id_size_class(uid_t uid, gid_t gid);
+static enum tsclass get_time_size_class(time_t atime, time_t mtime);
 static int rec_extract(struct sar_file *out, size_t idx);
-static void write_regular(struct sar_file *out, const struct stat *buf);
-static void write_link(struct sar_file *out, const struct stat *buf);
-static void write_dev(struct sar_file *out, const struct stat *buf);
+static void write_regular(struct sar_file *out);
+static void write_link(struct sar_file *out);
+static void write_dev(struct sar_file *out);
 static void write_control(struct sar_file *out, uint16_t id);
 static void write_name(struct sar_file *out, const char *name);
 static void read_regular(struct sar_file *out, mode_t mode);
@@ -71,8 +74,7 @@ static void read_fifo(struct sar_file *out, mode_t mode);
 static void read_device(struct sar_file *out, mode_t mode);
 static void read_hardlink(struct sar_file *out, mode_t mode);
 static void clean_hardlinks(struct sar_file *out);
-static char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
-                          nlink_t links);
+static char * watch_inode(struct sar_file *out);
 static void show_file(const struct sar_file *out, const char *path,
                       const char *link, mode_t mode, uint16_t sar_mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
@@ -82,34 +84,22 @@ static void show_file(const struct sar_file *out, const char *path,
    bother if it was already created we trunc it */
 struct sar_file * sar_creat(const char *path,
                             const char *compress,
-                            bool use_32id,
-                            bool use_64time,
                             bool use_crc,
                             bool use_ntime,
                             unsigned int verbose)
 {
   uint32_t magik = MAGIK;
+  uint32_t s_magik;
 
   struct sar_file *out = xmalloc(sizeof(struct sar_file));
 
   out->verbose = verbose;
   out->version = MAGIK_VERSION;
 
-  if(use_32id)
-    out->flags |= A_I32ID;
-  if(use_64time)
-    out->flags |= A_I64TIME;
   if(use_crc)
     out->flags |= A_ICRC;
   if(use_ntime)
     out->flags |= A_INTIME;
-
-#ifndef DISABLE_TIME_WIDTH_CHECK
-  /* avoid 1901/2038 bug */
-  time_t now = time(NULL);
-  if((int32_t)now != now)
-    out->flags |= A_I64TIME;
-#endif /* TIME_WIDTH_CHECK */
 
   if(!path)
     out->fd = STDOUT_FILENO;
@@ -144,8 +134,11 @@ struct sar_file * sar_creat(const char *path,
     out->fd = fd[1];
   }
 
-  /* write magik number and flags */
-  xwrite(out->fd, &magik, sizeof(magik));
+  /* write magik number and flags
+     notice we convert magik to little endian first
+     flags which is 1 byte wide is not converted though */
+  s_magik = htole32(magik);
+  xwrite(out->fd, &s_magik, sizeof(s_magik));
   xwrite(out->fd, &out->flags, sizeof(out->flags));
 
   /* for debugging purpose */
@@ -163,6 +156,7 @@ void sar_close(struct sar_file *file)
 
   int status = 0;
 
+  /* we need to wait for compression child to return */
   wait(&status);
 
   if(status)
@@ -278,8 +272,7 @@ static void free_hardlinks(struct sar_file *out)
       free(out->hl_tbl[i].path);
 }
 
-static char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
-                          nlink_t links)
+static char * watch_inode(struct sar_file *out)
 {
   assert(out);
   assert(out->hl_tbl);
@@ -291,7 +284,8 @@ static char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
   while(i--) {
     if(!out->hl_tbl[i].path)
       null_idx = i;
-    else if(out->hl_tbl[i].inode == inode && out->hl_tbl[i].device == device) {
+    else if(out->hl_tbl[i].inode  == out->stat.st_ino &&
+            out->hl_tbl[i].device == out->stat.st_dev) {
       char *path = strdup(out->hl_tbl[i].path);
 
       out->hl_tbl[i].links--;
@@ -312,27 +306,114 @@ static char * watch_inode(struct sar_file *out, ino_t inode, dev_t device,
     null_idx = out->hl_tbl_sz + 1;
   }
 
-  out->hl_tbl[null_idx].inode  = inode;
-  out->hl_tbl[null_idx].device = device;
-  out->hl_tbl[null_idx].links  = links;
+  out->hl_tbl[null_idx].inode  = out->stat.st_ino;
+  out->hl_tbl[null_idx].device = out->stat.st_dev;
+  out->hl_tbl[null_idx].links  = out->stat.st_nlink;
   out->hl_tbl[null_idx].path   = strdup(out->wp);
 
   return NULL;
 }
 
-static void write_regular(struct sar_file *out, const struct stat *buf)
+static enum fsclass get_file_size_class(off_t size)
+{
+  if(size < UINT8_MAX)
+    return N_FBYTE;
+  else if(size < UINT16_MAX)
+    return N_FKILO;
+  else if(size < UINT32_MAX)
+    return N_FGIGA;
+  else
+    return N_FHUGE;
+}
+
+static enum isclass get_id_size_class(uid_t uid, gid_t gid)
+{
+  if(uid == 0 && gid == 0)
+    return N_IRR;
+  else if(uid == 1000 && gid == 1000)
+    return N_IUU;
+  else if(uid == gid && uid < UINT8_MAX)
+    return N_ISRB;
+  else if(uid == gid && uid >= 1000 && uid <= (1000 + UINT8_MAX))
+    return N_ISUB;
+  else if(uid == 0 && (gid <= UINT8_MAX))
+    return N_IRB;
+  else if(uid == 1000 && gid >= 1000 && gid <= (1000 + UINT8_MAX))
+    return N_IUB;
+  else if(uid == gid && uid <= UINT16_MAX)
+    return N_ISKILO;
+  else if(uid <= UINT8_MAX && gid <= UINT8_MAX)
+    return N_IBBYTE;
+  else if(uid >= 1000 && gid >= 1000 &&
+          uid <= (1000 + UINT8_MAX) && gid <= (1000 + UINT8_MAX))
+    return N_IBUBYTE;
+  else if(uid <= UINT8_MAX && gid <= UINT16_MAX)
+    return N_IBK;
+  else if(gid <= UINT16_MAX && uid <= UINT8_MAX)
+    return N_IKB;
+  else if(uid == gid && uid <= UINT32_MAX)
+    return N_ISGIGA;
+  else if(uid <= UINT16_MAX && gid <= UINT16_MAX)
+    return N_IBKILO;
+  else if(uid <= UINT16_MAX && gid <= UINT32_MAX)
+    return N_IKG;
+  else if(uid <= UINT32_MAX && gid <= UINT16_MAX)
+    return N_IGK;
+  else
+    return N_IGG;
+}
+
+static enum tsclass get_time_size_class(time_t atime, time_t mtime)
+{
+  if(atime == mtime && atime <= INT32_MAX)
+    return N_TS32;
+  else if(atime == mtime && atime <= INT64_MAX)
+    return N_TS64;
+  else if(atime <= INT32_MAX && mtime <= INT32_MAX)
+    return N_TB32;
+  else
+    return N_TB64;
+}
+
+static void write_regular(struct sar_file *out)
 {
   char iobuf[IO_SZ];
-  uint64_t size = buf->st_size;
+  enum fsclass class;
   ssize_t n;
-  int fd = open(out->wp, O_RDONLY);
+  int fd;
+
+  /* store size first */
+  class = out->nsclass & N_FILE;
+  switch(class) {
+    uint8_t  size_byte;
+    uint16_t size_kilo;
+    uint32_t size_giga;
+    uint64_t size_huge;
+
+  case(N_FBYTE):
+    size_byte = out->stat.st_size;
+    crc_write(out, &size_byte, sizeof(size_byte));
+    break;
+  case(N_FKILO):
+    size_kilo = htole16(out->stat.st_size);
+    crc_write(out, &size_kilo, sizeof(size_kilo));
+    break;
+  case(N_FGIGA):
+    size_giga = htole32(out->stat.st_size);
+    crc_write(out, &size_giga, sizeof(size_giga));
+    break;
+  case(N_FHUGE):
+    size_huge = htole64(out->stat.st_size);
+    crc_write(out, &size_huge, sizeof(size_huge));
+    break;
+  }
+
+  /* store file */
+  fd = open(out->wp, O_RDONLY);
 
   /* if it fails here the archive is screwed out */
   if(fd < 0)
     err(EXIT_FAILURE, "cannot open \"%s\"", out->wp);
-
-  /* size of the file first */
-  crc_write(out, &size, sizeof(size));
 
   while((n = xread(fd, iobuf, IO_SZ)))
     crc_write(out, iobuf, n);
@@ -340,7 +421,7 @@ static void write_regular(struct sar_file *out, const struct stat *buf)
   close(fd);
 }
 
-static void write_link(struct sar_file *out, const struct stat *buf)
+static void write_link(struct sar_file *out)
 {
   ssize_t n;
   uint16_t size;
@@ -351,62 +432,66 @@ static void write_link(struct sar_file *out, const struct stat *buf)
   if(!out->link)
     err(EXIT_FAILURE, "cannot read \"%s\"", out->wp);
 
-  size = n;
-
+  size = htole16(n);
   crc_write(out, &size, sizeof(size));
   crc_write(out, out->link, n);
 }
 
-static void write_dev(struct sar_file *out, const struct stat *buf)
+static void write_dev(struct sar_file *out)
 {
-  uint64_t dev = buf->st_rdev;
+  uint64_t dev = htole64(out->stat.st_rdev);
 
   crc_write(out, &dev, sizeof(dev));
 }
 
 static void write_control(struct sar_file *out, uint16_t id)
 {
-  uint16_t control = M_ICTRL | id;
+  uint16_t control = htole16(M_ICTRL | id);
 
   xwrite(out->fd, &control, sizeof(control));
 }
 
 static void write_name(struct sar_file *out, const char *name)
 {
-  uint8_t t_size;
-  size_t size = strlen(name);
+  uint8_t s_size;
+  size_t size    = strlen(name);
+
 #ifndef DISABLE_NAME_WIDTH_CHECK
   /* check for large node name */
   if(size > NAME_MAX) {
     char *short_name = strndup(name, NAME_MAX);
-    t_size = size = NAME_MAX;
+    size   = NAME_MAX;
+    s_size = NAME_MAX;
 
     short_name[NAME_MAX - 1] = '~';
     short_name[NAME_MAX]     = '\0';
 
-    crc_write(out, &t_size, sizeof(t_size));
-    crc_write(out, short_name, size);
+    crc_write(out, &s_size, sizeof(s_size));
+    crc_write(out, short_name, NAME_MAX);
 
     warnx("name too long for \"%s\" reduced to \"%s\"", out->wp, short_name);
 
     free(short_name);
   }
   else {
-    t_size = size;
-    crc_write(out, &t_size, sizeof(t_size));
-    crc_write(out, name, size);
+    s_size = size;
+    crc_write(out, &s_size, sizeof(s_size));
+    crc_write(out, name, s_size);
   }
 #else
-  t_size = size;
-  crc_write(out, &t_size, sizeof(t_size));
+  s_size = size;
+  crc_write(out, &s_size, sizeof(s_size));
   crc_write(out, name, size);
 #endif /* NAME_WIDTH_CHECK */
 }
 
-static void show_file(const struct sar_file *out, const char *path,
-                      const char *link, mode_t mode, uint16_t sar_mode,
-                      uid_t uid, gid_t gid, off_t size, time_t atime,
-                      time_t mtime, uint32_t crc, bool display_crc)
+static void show_file(const struct sar_file *out,
+                      const char *path, const char *link,
+                      mode_t mode, uint16_t sar_mode,
+                      uid_t uid, gid_t gid,
+                      off_t size,
+                      time_t atime, time_t mtime,
+                      uint32_t crc, bool display_crc)
 {
   if(out->verbose >= 2) {
     char date[DATE_MAX];
@@ -557,11 +642,13 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   assert(out->wp);
   assert(name);
 
-  struct stat buf;
-  uint16_t mode;
+  enum isclass iclass;
+  enum tsclass tclass;
+  uint16_t mode, s_mode;
+  uint8_t s_nsclass;
 
   /* stat the file first to reupdate access time later */
-  if(lstat(out->wp, &buf) < 0) {
+  if(lstat(out->wp, &out->stat) < 0) {
     warn("could not stat \"%s\"", out->wp);
     return -1;
   }
@@ -579,74 +666,169 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   out->link = NULL;
 
   /* watch for hard link */
-  if(buf.st_nlink >= 2 && !S_ISDIR(buf.st_mode)) {
-    char *link = watch_inode(out, buf.st_ino, buf.st_dev, buf.st_nlink);
+  if(out->stat.st_nlink >= 2 && !S_ISDIR(out->stat.st_mode)) {
+    char *link = watch_inode(out);
 
     if(link) {
-      uint16_t link_size = strlen(link);
+      uint16_t s_link_sz;
+      uint16_t link_sz = strlen(link);
 
-      mode = (mode2uint16(buf.st_mode) & M_IPERM) | M_IHARD;
+      /* compute mode and convert endianess */
+      mode      = (mode2uint16(out->stat.st_mode) & M_IPERM) | M_IHARD;
+      s_mode    = htole16(mode);
+      s_link_sz = htole16(link_sz);
 
-      crc_write(out, &mode, sizeof(mode));
+      crc_write(out, &s_mode, sizeof(s_mode));
       write_name(out, name);
-      crc_write(out, &link_size, sizeof(link_size));
-      crc_write(out, link, link_size);
+      crc_write(out, &s_link_sz, sizeof(s_link_sz));
+      crc_write(out, link, link_sz);
 
+      /* save link for displaying */
       out->link = link;
 
       goto CRC;
     }
   }
 
-  /* store file attributes and extended information */
-  mode = mode2uint16(buf.st_mode);
-  crc_write(out, &mode, sizeof(mode));
+  /* now that we stated the file and we took care of hardlink
+     we may compute node file class */
+  out->nsclass  = get_file_size_class(out->stat.st_size);
+  out->nsclass |= get_id_size_class(out->stat.st_uid, out->stat.st_gid);
+  out->nsclass |= get_time_size_class(out->stat.st_atime, out->stat.st_mtime);
 
-  if(A_HAS_32ID(out)) {
-    uint32_t uid = buf.st_uid;
-    uint32_t gid = buf.st_gid;
+  /* store mode first */
+  mode   = mode2uint16(out->stat.st_mode);
+  s_mode = htole16(mode);
+  crc_write(out, &s_mode, sizeof(s_mode));
 
-    crc_write(out, &uid, sizeof(uid));
-    crc_write(out, &gid, sizeof(gid));
+  /* store node size class */
+  s_nsclass = htole16(out->nsclass);
+  crc_write(out, &s_nsclass, sizeof(s_nsclass));
+
+  /* store uid/gid */
+  iclass = out->nsclass & N_ID;
+  switch(iclass) {
+    uint8_t  id_byte;
+    uint16_t id_kilo;
+    uint32_t id_giga;
+
+  case(N_IRR):
+  case(N_IUU):
+    break;
+  case(N_ISRB):
+    id_byte = out->stat.st_uid;
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_ISUB):
+    id_byte = (out->stat.st_uid - 1000);
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_IRB):
+    id_byte = out->stat.st_gid;
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_IUB):
+    id_byte = out->stat.st_gid - 1000;
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_ISKILO):
+    id_kilo = htole16(out->stat.st_uid);
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+    break;
+  case(N_IBBYTE):
+    id_byte = out->stat.st_uid;
+    crc_write(out, &id_byte, sizeof(id_byte));
+
+    id_byte = out->stat.st_gid;
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_IBUBYTE):
+    id_byte = out->stat.st_uid - 1000;
+    crc_write(out, &id_byte, sizeof(id_byte));
+
+    id_byte = out->stat.st_gid - 1000;
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_IBK):
+    id_byte = out->stat.st_uid;
+    id_kilo = htole16(out->stat.st_gid);
+
+    crc_write(out, &id_byte, sizeof(id_byte));
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+    break;
+  case(N_IKB):
+    id_kilo = htole16(out->stat.st_uid);
+    id_byte = out->stat.st_gid;
+
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+    crc_write(out, &id_byte, sizeof(id_byte));
+    break;
+  case(N_ISGIGA):
+    id_giga = htole32(out->stat.st_uid);
+    crc_write(out, &id_giga, sizeof(id_giga));
+    break;
+  case(N_IBKILO):
+    id_kilo = htole16(out->stat.st_uid);
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+
+    id_kilo = htole16(out->stat.st_gid);
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+    break;
+  case(N_IKG):
+    id_kilo = htole16(out->stat.st_uid);
+    id_giga = htole32(out->stat.st_gid);
+
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+    crc_write(out, &id_giga, sizeof(id_giga));
+    break;
+  case(N_IGK):
+    id_giga = htole32(out->stat.st_uid);
+    id_kilo = htole16(out->stat.st_gid);
+
+    crc_write(out, &id_giga, sizeof(id_giga));
+    crc_write(out, &id_kilo, sizeof(id_kilo));
+  case(N_IGG):
+    id_giga = htole32(out->stat.st_uid);
+    crc_write(out, &id_giga, sizeof(id_giga));
+
+    id_giga = htole32(out->stat.st_gid);
+    crc_write(out, &id_giga, sizeof(id_giga));
+    break;
   }
-  else {
-    uint16_t uid = buf.st_uid;
-    uint16_t gid = buf.st_gid;
 
-#ifndef DISABLE_ID_WIDTH_CHECK
-    /* check for large uid/gid */
-    if(buf.st_uid > UINT16_MAX) {
-      uid = 0;
-      warnx("uid too large for \"%s\", 0 was used instead", out->wp);
-    }
-    if(buf.st_gid > UINT16_MAX) {
-      gid = 0;
-      warnx("gid too large for \"%s\", 0 was used instead", out->wp);
-    }
-#endif /* ID_WIDTH_CHECK */
+  /* store atime/mtime */
+  tclass = out->nsclass & N_TIME;
+  switch(tclass) {
+    int32_t time_giga;
+    int64_t time_huge;
 
-    crc_write(out, &uid, sizeof(uid));
-    crc_write(out, &gid, sizeof(gid));
-  }
+  case(N_TS32):
+    time_giga = htole32(out->stat.st_atime);
+    crc_write(out, &time_giga, sizeof(time_giga));
+    break;
+  case(N_TS64):
+    time_huge = htole32(out->stat.st_atime);
+    crc_write(out, &time_huge, sizeof(time_huge));
+    break;
+  case(N_TB32):
+    time_giga = htole32(out->stat.st_atime);
+    crc_write(out, &time_giga, sizeof(time_giga));
 
-  if(A_HAS_64TIME(out)) {
-    int64_t atime = buf.st_atime;
-    int64_t mtime = buf.st_mtime;
+    time_giga = htole32(out->stat.st_mtime);
+    crc_write(out, &time_giga, sizeof(time_giga));
+    break;
+  case(N_TB64):
+    time_huge = htole64(out->stat.st_atime);
+    crc_write(out, &time_huge, sizeof(time_huge));
 
-    crc_write(out, &atime, sizeof(atime));
-    crc_write(out, &mtime, sizeof(mtime));
-  }
-  else {
-    int32_t atime = buf.st_atime;
-    int32_t mtime = buf.st_mtime;
-
-    crc_write(out, &atime, sizeof(atime));
-    crc_write(out, &mtime, sizeof(mtime));
+    time_huge = htole64(out->stat.st_mtime);
+    crc_write(out, &time_huge, sizeof(time_huge));
+    break;
   }
 
   if(A_HAS_NTIME(out)) {
-    uint32_t atime_ns = buf.st_atim.tv_nsec;
-    uint32_t mtime_ns = buf.st_mtim.tv_nsec;
+    uint32_t atime_ns = htole32(out->stat.st_atim.tv_nsec);
+    uint32_t mtime_ns = htole32(out->stat.st_mtim.tv_nsec);
 
     crc_write(out, &atime_ns, sizeof(atime_ns));
     crc_write(out, &mtime_ns, sizeof(mtime_ns));
@@ -654,16 +836,16 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 
   write_name(out, name);
 
-  switch(buf.st_mode & S_IFMT) {
+  switch(out->stat.st_mode & S_IFMT) {
   case(S_IFREG):
-    write_regular(out, &buf);
+    write_regular(out);
     break;
   case(S_IFLNK):
-    write_link(out, &buf);
+    write_link(out);
     break;
   case(S_IFCHR):
   case(S_IFBLK):
-    write_dev(out, &buf);
+    write_dev(out);
     break;
   default:
     break;
@@ -671,35 +853,37 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
 
 CRC:
   /* write crc if needed */
-  if(A_HAS_CRC(out))
-    xwrite(out->fd, &out->crc, sizeof(out->crc));
+  if(A_HAS_CRC(out)) {
+    uint32_t s_crc = htole32(out->crc);
+    xwrite(out->fd, &s_crc, sizeof(s_crc));
+  }
 
   /* update remote mode */
   if(rmode)
-    *rmode = buf.st_mode;
+    *rmode = out->stat.st_mode;
 
   /* display file */
-  show_file(out, out->wp, out->link, buf.st_mode, mode, buf.st_uid, buf.st_gid,
-            buf.st_size, buf.st_atime, buf.st_mtime, out->crc,
-            A_HAS_CRC(out));
+  show_file(out, out->wp, out->link, out->stat.st_mode, mode, out->stat.st_uid,
+            out->stat.st_gid, out->stat.st_size, out->stat.st_atime,
+            out->stat.st_mtime, out->crc, A_HAS_CRC(out));
   if(out->link)
     free(out->link);
 
   /* reupdate access time */
-  reupdate_time(out, &buf);
+  reupdate_time(out);
 
   return 0;
 }
 
-static void reupdate_time(const struct sar_file *out, const struct stat *buf)
+static void reupdate_time(const struct sar_file *out)
 {
   struct timespec times[2];
 
-  times[0].tv_sec  = buf->st_atime;
-  times[0].tv_nsec = buf->st_atim.tv_nsec;
+  times[0].tv_sec  = out->stat.st_atime;
+  times[0].tv_nsec = out->stat.st_atim.tv_nsec;
 
-  times[1].tv_sec  = buf->st_mtime;
-  times[1].tv_nsec = buf->st_mtim.tv_nsec;
+  times[1].tv_sec  = out->stat.st_mtime;
+  times[1].tv_nsec = out->stat.st_mtim.tv_nsec;
 
   utimensat(AT_FDCWD, out->wp, times, AT_SYMLINK_NOFOLLOW);
 }
@@ -818,25 +1002,49 @@ struct sar_file * sar_read(const char *path,
 static void read_regular(struct sar_file *out, mode_t mode)
 {
   char iobuf[IO_SIZE];
-  uint64_t size;
+  enum fsclass class;
+  off_t size;
+  int fd;
 
+  /* read size first */
+  class = out->nsclass & N_FILE;
+  switch(class) {
+    uint8_t  size_byte;
+    uint16_t size_kilo;
+    uint32_t size_giga;
+    uint64_t size_huge;
+
+  case(N_FBYTE):
+    xcrc_read(out, &size_byte, sizeof(size_byte));
+    size = size_byte;
+    break;
+  case(N_FKILO):
+    xcrc_read(out, &size_kilo, sizeof(size_kilo));
+    size = le16toh(size_kilo);
+    break;
+  case(N_FGIGA):
+    xcrc_read(out, &size_giga, sizeof(size_giga));
+    size = le32toh(size_giga);
+    break;
+  case(N_FHUGE):
+    xcrc_read(out, &size_huge, sizeof(size_huge));
+    size = le64toh(size_huge);
+    break;
+  }
+
+  out->size = size;
+
+  /* when we list the archive we don't want to read
+     to whole file */
   if(out->list_only) {
-    xxread(out->fd, &size, sizeof(size));
-    out->size = size;
     lseek(out->fd, size, SEEK_CUR);
     return;
   }
 
   /* open output file */
-  int fd = open(out->wp, O_CREAT | O_RDWR | O_TRUNC, mode);
+  fd = open(out->wp, O_CREAT | O_RDWR | O_TRUNC, mode);
   if(fd < 0)
     err(EXIT_FAILURE, "could not open output file \"%s\"", out->wp);
-
-  /* read file size */
-  xcrc_read(out, &size, sizeof(size));
-  out->size = size;
-
-  /* endianess conversion for size should be done here */
 
   /* read file */
   while(size > 0) {
@@ -869,15 +1077,17 @@ static void read_link(struct sar_file *out, mode_t mode)
 
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
+  size = le16toh(size);
   out->size = size;
 
-  /* endianess conversion should be done here for size */
-
+  /* check size and extract path */
   if(size > WP_MAX)
     errx(EXIT_FAILURE, "path size exceeded");
   xcrc_read(out, path, size);
   path[size] = '\0';
 
+  /* duplicate path for displaying
+     it will be freed later by caller */
   out->link = strdup(path);
   if(!out->list_only && symlink(path, out->wp) < 0)
     warn("cannot create symlink \"%s\" to \"%s\"", out->wp, path);
@@ -893,16 +1103,17 @@ static void read_device(struct sar_file *out, mode_t mode)
 {
   uint64_t dev;
 
+  /* used for displaying */
   out->size = sizeof(dev);
 
+  /* avoid reading when listing the archive */
   if(out->list_only) {
     lseek(out->fd, sizeof(dev), SEEK_CUR);
     return;
   }
 
   xcrc_read(out, &dev, sizeof(dev));
-
-  /* endianess conversion should be done here for dev */
+  dev = le64toh(dev);
 
   if(mknod(out->wp, mode, dev) < 0)
     err(EXIT_FAILURE, "cannot create device \"%s\"", out->wp);
@@ -915,15 +1126,17 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 
   /* read link length */
   xcrc_read(out, &size, sizeof(size));
+  size = le16toh(size);
   out->size = size;
 
-  /* endianess conversion should be done here for size */
-
+  /* check size and extract path */
   if(size > WP_MAX)
     errx(EXIT_FAILURE, "path size exceeded");
   xcrc_read(out, path, size);
   path[size] = '\0';
 
+  /* duplicate link path for displaying
+     it will be freed later by caller */
   out->link = strdup(path);
   if(!out->list_only && link(path, out->wp) < 0)
     warnx("cannot create hardlink \"%s\" to \"%s\"", out->wp, path);
@@ -936,6 +1149,8 @@ static int rec_extract(struct sar_file *out, size_t idx)
   assert(out->wp);
 
   char name[NODE_MAX + 1];
+  enum isclass iclass;
+  enum tsclass tclass;
   time_t atime = 0;
   time_t mtime = 0;
   uid_t uid = 0;
@@ -948,13 +1163,16 @@ static int rec_extract(struct sar_file *out, size_t idx)
   uint8_t size, i;
 
   /* setup crc and fallback variables we don't
-     care if we won't compute it or not */
+     care if we compute it or not */
   out->crc = 0;
-  out->link = 0;
+  out->link = NULL;
   out->size = 0;
 
+  /* read mode and convert endianess */
   xcrc_read(out, &mode, sizeof(mode));
+  mode = le16toh(mode);
 
+  /* switch for control and hardlink */
   switch(mode & M_IFMT) {
   case(M_IHARD):
     goto EXTRACT_NAME;
@@ -970,68 +1188,166 @@ static int rec_extract(struct sar_file *out, size_t idx)
     break;
   }
 
-  /* read file attribues and extended information */
-  if(A_HAS_32ID(out)) {
-    uint32_t t_uid;
-    uint32_t t_gid;
+  /* read node size class */
+  xcrc_read(out, &out->nsclass, sizeof(out->nsclass));
 
-    xcrc_read(out, &t_uid, sizeof(t_uid));
-    xcrc_read(out, &t_gid, sizeof(t_gid));
+  /* read uid/gid */
+  iclass = out->nsclass & N_ID;
+  switch(iclass) {
+    uint8_t  id_byte;
+    uint16_t id_kilo;
+    uint32_t id_giga;
 
-    /* endianess conversion should be done here */
+  case(N_IRR):
+    uid = 0;
+    gid = 0;
+    break;
+  case(N_IUU):
+    uid = 1000;
+    gid = 1000;
+    break;
+  case(N_ISRB):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    uid = id_byte;
+    gid = id_byte;
+    break;
+  case(N_ISUB):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    uid = id_byte + 1000;
+    gid = id_byte + 1000;
+    break;
+  case(N_IRB):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    uid = 0;
+    gid = id_byte;
+    break;
+  case(N_IUB):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    uid = 1000;
+    gid = id_byte + 1000;
+    break;
+  case(N_ISKILO):
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    id_kilo = le16toh(id_kilo);
+    uid = id_kilo;
+    gid = id_kilo;
+    break;
+  case(N_IBBYTE):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    uid = id_byte;
 
-    uid = t_uid;
-    gid = t_gid;
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    gid = id_byte;
+    break;
+  case(N_IBUBYTE):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    uid = id_byte + 1000;
+
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    gid = id_byte + 1000;
+    break;
+  case(N_IBK):
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    id_kilo = le16toh(id_kilo);
+    uid = id_byte;
+    gid = id_kilo;
+    break;
+  case(N_IKB):
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    xcrc_read(out, &id_byte, sizeof(id_byte));
+    id_kilo = le16toh(id_kilo);
+    uid = id_kilo;
+    gid = id_byte;
+    break;
+  case(N_ISGIGA):
+    xcrc_read(out, &id_giga, sizeof(id_giga));
+    id_giga = le32toh(id_giga);
+    uid = id_giga;
+    gid = id_giga;
+    break;
+  case(N_IBKILO):
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    id_kilo = le16toh(id_kilo);
+    uid = id_kilo;
+
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    id_kilo = le16toh(id_kilo);
+    gid = id_kilo;
+    break;
+  case(N_IKG):
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    xcrc_read(out, &id_giga, sizeof(id_giga));
+    id_kilo = le16toh(id_kilo);
+    id_giga = le32toh(id_giga);
+    uid = id_kilo;
+    gid = id_giga;
+    break;
+  case(N_IGK):
+    xcrc_read(out, &id_giga, sizeof(id_giga));
+    xcrc_read(out, &id_kilo, sizeof(id_kilo));
+    id_kilo = le16toh(id_kilo);
+    id_giga = le32toh(id_giga);
+    uid = id_giga;
+    gid = id_kilo;
+  case(N_IGG):
+    xcrc_read(out, &id_giga, sizeof(id_giga));
+    id_giga = le32toh(id_giga);
+    uid = id_giga;
+
+    xcrc_read(out, &id_giga, sizeof(id_giga));
+    id_giga = le32toh(id_giga);
+    gid = id_giga;
+    break;
   }
-  else {
-    uint16_t t_uid;
-    uint16_t t_gid;
 
-    xcrc_read(out, &t_uid, sizeof(t_uid));
-    xcrc_read(out, &t_gid, sizeof(t_gid));
+  /* read atime/mtime */
+  tclass = out->nsclass & N_TIME;
+  switch(tclass) {
+    int32_t time_giga;
+    int64_t time_huge;
 
-    /* endianess conversion should be done here */
+  case(N_TS32):
+    xcrc_read(out, &time_giga, sizeof(time_giga));
+    time_giga = le32toh(time_giga);
+    atime = time_giga;
+    mtime = time_giga;
+    break;
+  case(N_TS64):
+    xcrc_read(out, &time_huge, sizeof(time_huge));
+    time_huge = le64toh(time_huge);
+    atime = time_huge;
+    mtime = time_huge;
+    break;
+  case(N_TB32):
+    xcrc_read(out, &time_giga, sizeof(time_giga));
+    atime = le32toh(time_giga);
 
-    uid = t_uid;
-    gid = t_gid;
-  }
+    xcrc_read(out, &time_giga, sizeof(time_giga));
+    mtime = le32toh(time_giga);
+    break;
+  case(N_TB64):
+    xcrc_read(out, &time_huge, sizeof(time_huge));
+    atime = le64toh(time_huge);
 
-  if(A_HAS_64TIME(out)) {
-    int64_t t_atime;
-    int64_t t_mtime;
-
-    xcrc_read(out, &t_atime, sizeof(t_atime));
-    xcrc_read(out, &t_mtime, sizeof(t_mtime));
-
-    /* endianess conversion should be done here */
-
-    atime = t_atime;
-    mtime = t_mtime;
-  }
-  else {
-    int32_t t_atime;
-    int32_t t_mtime;
-
-    xcrc_read(out, &t_atime, sizeof(t_atime));
-    xcrc_read(out, &t_mtime, sizeof(t_mtime));
-
-    /* endianess conversion should be done here */
-
-    atime = t_atime;
-    mtime = t_mtime;
+    xcrc_read(out, &time_huge, sizeof(time_huge));
+    mtime = le64toh(time_huge);
+    break;
   }
 
   if(A_HAS_NTIME(out)) {
     xcrc_read(out, &atime_ns, sizeof(atime_ns));
     xcrc_read(out, &mtime_ns, sizeof(mtime_ns));
-
-    /* endianess conversion should be done here */
+    atime_ns = le32toh(atime_ns);
+    mtime_ns = le32toh(mtime_ns);
   }
 
 EXTRACT_NAME:
-  /* extract name */
+  /* extract name size, size is one byte so
+     we don't do the endianess conversion */
   xcrc_read(out, &size, sizeof(size));
 
+  /* checkup size and extract name */
   if(size > NODE_MAX)
     errx(EXIT_FAILURE, "node max size exceeded");
   xcrc_read(out, name, size);
@@ -1046,7 +1362,7 @@ EXTRACT_NAME:
     out->wp[idx + i] = name[i];
   out->wp[idx + size] = '\0';
 
-  /* endianess conversion should be done here */
+  /* we would like to see the real mode too */
   real_mode = uint162mode(mode);
 
   switch(mode & M_IFMT) {
@@ -1071,8 +1387,7 @@ EXTRACT_NAME:
     break;
   }
 
-  /* change attributes */
-
+  /* change attributes of the extracted file */
   if(!out->list_only) {
     lchown(out->wp, uid, gid);
     chmod(out->wp, real_mode);
@@ -1100,6 +1415,7 @@ EXTRACT_NAME:
   /* compute crc */
   if(A_HAS_CRC(out)) {
     xxread(out->fd, &crc, sizeof(crc));
+    crc = le32toh(crc);
 
     if(!out->list_only && crc != out->crc)
       warnx("corrupted file \"%s\"", out->wp);
@@ -1115,6 +1431,7 @@ EXTRACT_NAME:
   if((mode & M_IFMT) == M_IDIR) {
     out->wp[idx + size]     = '/';
     out->wp[idx + size + 1] = '\0';
+
     /* read until we receive a child control stamp */
     while(rec_extract(out, idx + size + 1) != 1);
 
@@ -1152,12 +1469,8 @@ void sar_info(struct sar_file *out)
   printf("SAR file:\n"
          "\tVersion        : %d\n"
          "\tHas CRC        : %s\n"
-         "\tHas wide ID    : %s\n"
-         "\tHas wide time  : %s\n"
          "\tHas nano time  : %s\n",
          out->version,
          S_BOOLEAN(A_HAS_CRC(out)),
-         S_BOOLEAN(A_HAS_32ID(out)),
-         S_BOOLEAN(A_HAS_64TIME(out)),
          S_BOOLEAN(A_HAS_NTIME(out)));
 }

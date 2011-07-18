@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-16 19:11:14 gawen>
+   Time-stamp: <2011-07-18 13:49:21 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -55,20 +55,23 @@
 #define MAGIK      (0x00524153 | MAGIK_VERSION)
 
 struct sar_file {
-  int fd;           /* file descriptor of the archive */
-  uint8_t flags;    /* flags of this archive */
-  uint8_t version;  /* version of sar archive */
+  int fd;                  /* file descriptor of the archive */
+  uint8_t flags;           /* flags of this archive */
+  uint8_t version;         /* version of sar archive */
 
-  unsigned int verbose; /* verbose level */
-  bool list_only;       /* do not extract file skip them instead */
+  unsigned int verbose;    /* verbose level */
+  bool list_only;          /* do not extract file skip them instead */
 
-  char *wp;         /* working path */
-  size_t wp_sz;     /* working path size */
-  size_t wp_idx;    /* working path index */
-  size_t wp_max;    /* working path max size */
-  uint32_t crc;     /* current crc */
-  char *link;       /* symlink or hardlink destination */
-  off_t size;       /* size of a node */
+  char *wp;                /* working path */
+  size_t wp_sz;            /* working path size */
+  size_t wp_idx;           /* working path index */
+  size_t wp_max;           /* working path max size */
+  struct stat stat;        /* current stat information */
+  uint8_t nsclass;         /* current node size class */
+  uint32_t crc;            /* current crc */
+  char *link;              /* symlink or hardlink destination */
+  off_t size;              /* size of a node */
+
 
   struct sar_hardlink *hl_tbl; /* hard link table */
   size_t hl_tbl_sz;
@@ -124,16 +127,46 @@ struct sar_hardlink {
 #define M_ISCTRL(m) M_IS(m, CTRL)
 
 /* archive flags */
-#define A_I32ID   0x1 /* use 32 bits uid/gid instead of 16 bits */
-#define A_I64TIME 0x2 /* use 64 bits time instead of 32 bits */
-#define A_ICRC    0x4 /* use a checksum for each file */
-#define A_INTIME  0x8 /* use nanosecond timestamp */
+#define A_ICRC    0x1 /* use a checksum for each file */
+#define A_INTIME  0x2 /* use nanosecond timestamp */
 
 #define A_HAS(a, t)    ((a->flags) & A_I ## t)
-#define A_HAS_32ID(a)   A_HAS(a, 32ID)
-#define A_HAS_64TIME(a) A_HAS(a, 64TIME)
 #define A_HAS_CRC(a)    A_HAS(a, CRC)
 #define A_HAS_NTIME(a)  A_HAS(a, NTIME)
+
+/* node size class related flags */
+/* file size class flags */
+#define N_FILE           0x3  /* bit mask for file size class bit fields */
+enum fsclass { N_FBYTE = 0x0, /* byte file size class ( 0   - 255 ) Bytes */
+               N_FKILO = 0x1, /* kilo file size class ( 255 - 65K ) Bytes */
+               N_FGIGA = 0x2, /* giga file size class ( 65K - 4G  ) Bytes */
+               N_FHUGE = 0x3  /* huge file size class ( 4G  - 10E ) Bytes */ };
+
+/* id size class flags */
+#define N_ID                0x3c  /* bit mask for id size class bit fields */
+enum isclass { N_IRR      = 0x0,  /* root/root id size class (0 Byte) */
+               N_IUU      = 0x4,  /* user/user id size class (0 Byte) */
+               N_ISRB     = 0x8,  /* same root byte id size class (1 Byte) */
+               N_ISUB     = 0xc,  /* same user byte id size class (1 Byte) */
+               N_IRB      = 0x10, /* root/byte id size class (1 Byte) */
+               N_IUB      = 0x14, /* user/byte id size class (1 Byte) */
+               N_ISKILO   = 0x18, /* same kilo id size class (2 Bytes) */
+               N_IBBYTE   = 0x1c, /* both byte id size class (2 Bytes) */
+               N_IBUBYTE  = 0x20, /* both user byte id size class (2 Bytes) */
+               N_IBK      = 0x24, /* byte/kilo id size class (3 Bytes) */
+               N_IKB      = 0x28, /* kilo/byte id size class (3 Bytes) */
+               N_ISGIGA   = 0x2c, /* same giga id size class (4 Bytes) */
+               N_IBKILO   = 0x30, /* kilo/kilo id size class (4 Bytes) */
+               N_IKG      = 0x34, /* kilo/giga id size class (6 Bytes) */
+               N_IGK      = 0x38, /* giga/kilo id size class (6 Bytes) */
+               N_IGG      = 0x3c, /* giga/giga id size class (8 Bytes) */ };
+
+/* time size class flags */
+#define N_TIME          0xc0  /* bit mask for time size class bit fields */
+enum tsclass { N_TS32 = 0x0,  /* same 32bits time size class (4 Bytes) */
+               N_TS64 = 0x40, /* same 64bits time size class (8 Bytes) */
+               N_TB32 = 0x80, /* both 32bits time size class (8 Bytes) */
+               N_TB64 = 0xc0, /* both 64bits time size class (8 Bytes) */ };
 
 /* default and max sizes */
 enum max     { WP_MAX = 4095,
@@ -147,8 +180,6 @@ enum size    { HL_TBL_SZ = 1024,
 
 struct sar_file * sar_creat(const char *path,
                             const char *compress,
-                            bool use_32id,
-                            bool use_64time,
                             bool use_crc,
                             bool use_ntime,
                             unsigned int verbose);

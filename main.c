@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-16 22:38:14 gawen>
+   Time-stamp: <2011-07-18 14:10:58 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -61,8 +61,6 @@ struct opts_val {
 
   bool use_file;
   bool no_crc;
-  bool wide_id;
-  bool wide_stamp;
   bool no_nano;
 
   const char *compress;
@@ -106,25 +104,6 @@ static void help(const struct opts_name *names, const char *prog_name)
   }
 }
 
-static void checkup_cap()
-{
-  time_t now = time(NULL);
-
-  printf("System:\n");
-  printf(" Time width        : %lu bits\n", 8 * sizeof(time_t));
-  printf(" UID width         : %lu bits\n", 8 * sizeof(uid_t));
-  printf(" GID width         : %lu bits\n", 8 * sizeof(gid_t));
-  printf(" Mode width        : %lu bits\n", 8 * sizeof(mode_t));
-  printf("\n");
-
-  if((int32_t)now == now)
-    printf(" Should use '-T' option : no\n");
-  else
-    printf(" Should use '-T' option : yes\n");
-  printf(" Should use '-U' option : no\n");
-  printf(" May use '-N' option    : yes\n");
-}
-
 static void except_archive(int argc, int optind, char *argv[],
                            struct opts_val *val)
 {
@@ -159,8 +138,7 @@ static void except_more(int argc, int optind, char *argv[],
 static void cmdline(int argc, char *argv[], struct opts_val *val)
 {
   int exit_status = EXIT_FAILURE;
-  enum opt { OPT_CAP,
-             OPT_COMPRESS,
+  enum opt { OPT_COMPRESS,
              OPT_LZMA,
              OPT_LZIP,
              OPT_LZOP,
@@ -180,10 +158,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
              OPT_LIST        = 't',
              OPT_FILE        = 'f',
              OPT_NO_CRC      = 'C',
-             OPT_WIDE_ID     = 'U',
-             OPT_WIDE_TIME   = 'T',
-             OPT_NO_NANO     = 'N',
-             OPT_WIDE        = 'w' };
+             OPT_NO_NANO     = 'N' };
 
   struct opts_name names[] = {
     { 'V', "version",     "Print version information" },
@@ -206,11 +181,8 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { 'x', "extract",     "Extract all files from an archive" },
     { 't',  "list",       "List all files in an archive" },
     { 'f',  "file",       "Use a file instead of standard input/output" },
-    { 'U',  "wide-id",    "Use wider user/group id" },
-    { 'T',  "wide-time",  "Use wider timestamp (avoid year 1901/2038 problem)"},
     { 'C',  "no-crc",     "Disable integrity checks" },
     { 'N',  "no-nano",    "Disable timestamps precision (upto nanoseconds)" },
-    { 'w',  "wide",       "Equivalent to -TU" },
     { 0, NULL, NULL }
   };
 
@@ -221,7 +193,6 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 #endif /* COMMIT */
     { "help", no_argument, NULL, OPT_HELP },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
-    { "cap", no_argument, NULL, OPT_CAP },
     { "compress", required_argument, NULL, OPT_COMPRESS },
     { "lzw", no_argument, NULL, OPT_LZW },
     { "gzip", no_argument, NULL, OPT_GZIP },
@@ -236,10 +207,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     { "list", no_argument, NULL, OPT_LIST },
     { "file", no_argument, NULL, OPT_FILE },
     { "no-crc", no_argument, NULL, OPT_NO_CRC },
-    { "wide-id", no_argument, NULL, OPT_WIDE_ID },
-    { "wide-time", no_argument, NULL, OPT_WIDE_TIME },
     { "no-nano", no_argument, NULL, OPT_NO_NANO },
-    { "wide", no_argument, NULL, OPT_WIDE },
     { NULL, 0, NULL, 0 }
   };
 
@@ -248,7 +216,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   pgn = pgn ? (pgn + 1) : argv[0];
 
   while(1) {
-    int c = getopt_long(argc, argv, "VhvZzjJicxtfCUTNw", opts, NULL);
+    int c = getopt_long(argc, argv, "VhvZzjJicxtfCN", opts, NULL);
 
     if(c == -1)
       break;
@@ -300,22 +268,9 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     case OPT_NO_CRC:
       val->no_crc = true;
       break;
-    case OPT_WIDE_ID:
-      val->wide_id = true;
-      break;
-    case OPT_WIDE_TIME:
-      val->wide_stamp = true;
-      break;
     case OPT_NO_NANO:
       val->no_nano    = true;
       break;
-    case OPT_WIDE:
-      val->wide_id    = true;
-      val->wide_stamp = true;
-      break;
-    case OPT_CAP:
-      checkup_cap();
-      exit(EXIT_SUCCESS);
 #ifdef COMMIT
     case OPT_COMMIT:
       printf("Commit id SHA1 : " COMMIT "\n");
@@ -357,9 +312,9 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     break;
   }
 
-  if((val->no_crc || val->wide_id || val->wide_stamp || val->no_nano) &&
+  if((val->no_crc || val->no_nano) &&
      !(val->mode == MD_CREATE))
-    errx(EXIT_FAILURE, "Options 'CUTNw' are only availables with 'c' option\n"
+    errx(EXIT_FAILURE, "Options 'CN' are only availables with 'c' option\n"
          "Try '%s --help'", pgn);
 
 #ifndef DISABLE_EGGS
@@ -384,8 +339,6 @@ int main(int argc, char *argv[])
   case(MD_CREATE):
     f = sar_creat(val.file,
                   val.compress,
-                  val.wide_id,
-                  val.wide_stamp,
                   !val.no_crc,
                   !val.no_nano,
                   val.verbose);
