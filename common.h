@@ -58,6 +58,7 @@ int skip(int fd, off_t size);
 int xfork();
 int xpipe(int pipefd[2]);
 int xdup2(int oldfd, int newfd);
+char * xgetcwd(char *buf, size_t size);
 void * xmalloc(size_t size);
 void * xrealloc(void *ptr, size_t size);
 ssize_t xwrite(int fd, const void *buf, size_t count);
@@ -68,5 +69,6 @@ int xstat(const char *path, struct stat *buf);
 int xchown(const char *path, uid_t owner, gid_t group);
 char * xreadlink_malloc_n(const char *filename, ssize_t *n);
 int xutime(const char *filename, const struct utimbuf *times);
+int xchdir(const char *path);
 
 #endif /* _COMMON_H_ */

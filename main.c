@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-18 14:10:58 gawen>
+   Time-stamp: <2011-07-18 22:42:51 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -63,10 +63,23 @@ struct opts_val {
   bool no_crc;
   bool no_nano;
 
+  char *cwd;           /* original cwd */
+  const char *tmp_cwd; /* new cwd */
   const char *compress;
   const char *file;
   const char *source;
 };
+
+static struct opts_val *opt_value;
+
+static void clean_exit()
+{
+  /* revert to original working directory */
+  if(opt_value->cwd) {
+    xchdir(opt_value->cwd);
+    free(opt_value->cwd);
+  }
+}
 
 static void version()
 {
@@ -145,6 +158,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 #ifdef COMMIT
              OPT_COMMIT,
 #endif /* COMMIT */
+             OPT_DIRECTORY   = 'd',
              OPT_LZW         = 'Z',
              OPT_GZIP        = 'z',
              OPT_BZIP2       = 'j',
@@ -167,6 +181,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 #endif /* COMMIT */
     { 'h', "help",        "Print this message" },
     { 'v', "verbose",     "Be verbose (may be used multiple times)" },
+    { 'd', "directory",   "Change to directory DIR" },
     { 0  , "compress",    "Compress using the specified executable" },
     { 'Z', "lzw",         "Alias for '--compress compress'" },
     { 'z', "gzip",        "Alias for '--compress gzip'" },
@@ -192,6 +207,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 #endif /* COMMIT */
     { "help", no_argument, NULL, OPT_HELP },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
+    { "directory", required_argument, NULL, OPT_DIRECTORY },
     { "compress", required_argument, NULL, OPT_COMPRESS },
     { "lzw", no_argument, NULL, OPT_LZW },
     { "gzip", no_argument, NULL, OPT_GZIP },
@@ -215,7 +231,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   pgn = pgn ? (pgn + 1) : argv[0];
 
   while(1) {
-    int c = getopt_long(argc, argv, "VhvZzjJicxtfCN", opts, NULL);
+    int c = getopt_long(argc, argv, "Vhvd:ZzjJicxtfCN", opts, NULL);
 
     if(c == -1)
       break;
@@ -226,6 +242,11 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       break;
     case OPT_COMPRESS:
       val->compress = optarg;
+      break;
+    case OPT_DIRECTORY:
+      val->cwd     = xmalloc(PATH_MAX);
+      val->cwd     = xgetcwd(val->cwd, PATH_MAX);
+      val->tmp_cwd = optarg;
       break;
     case OPT_GZIP:
       val->compress = "gzip";
@@ -326,6 +347,9 @@ int main(int argc, char *argv[])
   struct opts_val val = {0};
   struct sar_file *f;
 
+  opt_value = &val;
+  atexit(clean_exit);
+
   cmdline(argc, argv, &val);
 
   switch(val.mode) {
@@ -341,14 +365,20 @@ int main(int argc, char *argv[])
                   !val.no_crc,
                   !val.no_nano,
                   val.verbose);
+    if(val.tmp_cwd)
+      xchdir(val.tmp_cwd);
     sar_add(f, val.source);
     break;
   case(MD_EXTRACT):
     f = sar_read(val.file, val.compress, val.verbose);
+    if(val.tmp_cwd)
+      xchdir(val.tmp_cwd);
     sar_extract(f);
     break;
   case(MD_LIST):
     f = sar_read(val.file, val.compress, val.verbose);
+    if(val.tmp_cwd)
+      xchdir(val.tmp_cwd);
     sar_list(f);
     break;
   }

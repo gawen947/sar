@@ -73,10 +73,13 @@ SAFE_CALL0(fork, < 0, "cannot fork", int)
 
 SAFE_CALL1(pipe, < 0, "cannot create pipe", int, int *)
 SAFE_CALL1(malloc, == NULL, "out of memory", void *, size_t)
+SAFE_CALL1(chdir, < 0, "cannot change directory", int, const char *)
 
 SAFE_CALL2(realloc, == NULL, "out of memory", void *, void *, size_t)
 SAFE_CALL2(stat, < 0, "IO stat error", int, const char *, struct stat *)
 SAFE_CALL2(dup2, < 0, "cannot duplicate file descriptors", int, int, int)
+SAFE_CALL2(getcwd, == NULL, "cannot get current working directory", char *,
+           char *, size_t)
 SAFE_CALL2(skip, < 0, "cannot seek", int, int, off_t)
 SAFE_CALL2(readlink_malloc_n, == NULL, "IO readlink error", char *,
            const char *, ssize_t *)
