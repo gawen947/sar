@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-18 14:04:04 gawen>
+   Time-stamp: <2011-07-18 15:09:30 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -424,16 +424,34 @@ static void write_regular(struct sar_file *out)
 static void write_link(struct sar_file *out)
 {
   ssize_t n;
-  uint16_t size;
+  enum fsclass class;
 
+  /* read link */
   out->link = xreadlink_malloc_n(out->wp, &n);
 
   /* if it fails here the archive is screwed out */
   if(!out->link)
     err(EXIT_FAILURE, "cannot read \"%s\"", out->wp);
 
-  size = htole16(n);
-  crc_write(out, &size, sizeof(size));
+  /* store size */
+  class = out->nsclass & N_FILE;
+  switch(class) {
+    uint8_t  size_byte;
+    uint16_t size_kilo;
+
+  case(N_FBYTE):
+    size_byte = n;
+    crc_write(out, &size_byte, sizeof(size_byte));
+    break;
+  case(N_FKILO):
+    size_kilo = htole16(n);
+    crc_write(out, &size_kilo, sizeof(size_kilo));
+    break;
+  case(N_FGIGA):
+  case(N_FHUGE):
+    errx(EXIT_FAILURE, "link size too large for \"%s\"", out->wp);
+  }
+
   crc_write(out, out->link, n);
 }
 
@@ -1073,11 +1091,27 @@ static void read_dir(struct sar_file *out, mode_t mode)
 static void read_link(struct sar_file *out, mode_t mode)
 {
   char path[WP_MAX + 1];
+  enum fsclass class;
   uint16_t size;
 
   /* read link length */
-  xcrc_read(out, &size, sizeof(size));
-  size = le16toh(size);
+  class = out->nsclass & N_FILE;
+  switch(class) {
+    uint8_t  size_byte;
+    uint16_t size_kilo;
+
+  case(N_FBYTE):
+    xcrc_read(out, &size_byte, sizeof(size_byte));
+    size = size_byte;
+    break;
+  case(N_FKILO):
+    xcrc_read(out, &size_kilo, sizeof(size_kilo));
+    size = le16toh(size_kilo);
+    break;
+  case(N_FGIGA):
+  case(N_FHUGE):
+    errx(EXIT_FAILURE, "link size too large for \"%s\"", out->wp);
+  }
   out->size = size;
 
   /* check size and extract path */
