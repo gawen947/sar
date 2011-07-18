@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-18 18:59:56 gawen>
+   Time-stamp: <2011-07-18 23:05:31 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -302,7 +302,8 @@ static char * watch_inode(struct sar_file *out)
   /* search for a empty index  */
   if(null_idx < 0) {
     out->hl_tbl_sz += HL_TBL_SZ;
-    xrealloc(out->hl_tbl, out->hl_tbl_sz * sizeof(struct sar_hardlink));
+    out->hl_tbl = xrealloc(out->hl_tbl,
+                           out->hl_tbl_sz * sizeof(struct sar_hardlink));
     null_idx = out->hl_tbl_sz + 1;
   }
 
