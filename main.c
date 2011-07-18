@@ -167,7 +167,6 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 #endif /* COMMIT */
     { 'h', "help",        "Print this message" },
     { 'v', "verbose",     "Be verbose (may be used multiple times)" },
-    { 0  , "cap",         "Checkup capabilities" },
     { 0  , "compress",    "Compress using the specified executable" },
     { 'Z', "lzw",         "Alias for '--compress compress'" },
     { 'z', "gzip",        "Alias for '--compress gzip'" },
@@ -273,7 +272,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
       break;
 #ifdef COMMIT
     case OPT_COMMIT:
-      printf("Commit id SHA1 : " COMMIT "\n");
+      printf("Commit-Id SHA1 : " COMMIT "\n");
       exit(EXIT_SUCCESS);
 #endif /* COMMIT */
     case OPT_VERSION:
