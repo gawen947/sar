@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-18 15:09:30 gawen>
+   Time-stamp: <2011-07-18 15:32:03 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -316,11 +316,11 @@ static char * watch_inode(struct sar_file *out)
 
 static enum fsclass get_file_size_class(off_t size)
 {
-  if(size < UINT8_MAX)
+  if(size <= UINT8_MAX)
     return N_FBYTE;
-  else if(size < UINT16_MAX)
+  else if(size <= UINT16_MAX)
     return N_FKILO;
-  else if(size < UINT32_MAX)
+  else if(size <= UINT32_MAX)
     return N_FGIGA;
   else
     return N_FHUGE;
@@ -332,7 +332,7 @@ static enum isclass get_id_size_class(uid_t uid, gid_t gid)
     return N_IRR;
   else if(uid == 1000 && gid == 1000)
     return N_IUU;
-  else if(uid == gid && uid < UINT8_MAX)
+  else if(uid == gid && uid <= UINT8_MAX)
     return N_ISRB;
   else if(uid == gid && uid >= 1000 && uid <= (1000 + UINT8_MAX))
     return N_ISUB;
@@ -351,13 +351,13 @@ static enum isclass get_id_size_class(uid_t uid, gid_t gid)
     return N_IBK;
   else if(gid <= UINT16_MAX && uid <= UINT8_MAX)
     return N_IKB;
-  else if(uid == gid && uid <= UINT32_MAX)
+  else if(uid == gid)
     return N_ISGIGA;
   else if(uid <= UINT16_MAX && gid <= UINT16_MAX)
     return N_IBKILO;
-  else if(uid <= UINT16_MAX && gid <= UINT32_MAX)
+  else if(uid <= UINT16_MAX)
     return N_IKG;
-  else if(uid <= UINT32_MAX && gid <= UINT16_MAX)
+  else if(gid <= UINT16_MAX)
     return N_IGK;
   else
     return N_IGG;
@@ -365,11 +365,11 @@ static enum isclass get_id_size_class(uid_t uid, gid_t gid)
 
 static enum tsclass get_time_size_class(time_t atime, time_t mtime)
 {
-  if(atime == mtime && atime <= INT32_MAX)
+  if(atime == mtime && (int32_t)atime == atime)
     return N_TS32;
-  else if(atime == mtime && atime <= INT64_MAX)
+  else if(atime == mtime)
     return N_TS64;
-  else if(atime <= INT32_MAX && mtime <= INT32_MAX)
+  else if((int32_t)atime == atime && (int32_t)mtime == mtime)
     return N_TB32;
   else
     return N_TB64;
