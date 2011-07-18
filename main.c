@@ -290,7 +290,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
   /* consider remaining arguments */
   switch(val->mode) {
   case(MD_NONE):
-    errx(EXIT_SUCCESS, "You must specify one of the 'cxti' or '--cap' options\n"
+    errx(EXIT_SUCCESS, "You must specify one of the 'cxti' options\n"
          "Try '%s --help'", pgn);
   case(MD_INFORMATION):
     if(val->use_file) {
