@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-07-18 18:16:36 gawen>
+   Time-stamp: <2011-07-18 19:00:31 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -35,8 +35,10 @@
 #include <assert.h>
 #include <string.h>
 #include <utime.h>
+#include <errno.h>
 #include <err.h>
 
+#include "sar.h"
 #include "common.h"
 
 #define SAFE_CALL0(name, erron, msg, ret)       \
@@ -75,6 +77,7 @@ SAFE_CALL1(malloc, == NULL, "out of memory", void *, size_t)
 SAFE_CALL2(realloc, == NULL, "out of memory", void *, void *, size_t)
 SAFE_CALL2(stat, < 0, "IO stat error", int, const char *, struct stat *)
 SAFE_CALL2(dup2, < 0, "cannot duplicate file descriptors", int, int, int)
+SAFE_CALL2(skip, < 0, "cannot seek", int, int, off_t)
 SAFE_CALL2(readlink_malloc_n, == NULL, "IO readlink error", char *,
            const char *, ssize_t *)
 SAFE_CALL2(utime, < 0, "IO chattr error", int, const char *,
@@ -136,10 +139,6 @@ ssize_t xxread(int fd, void *buf, size_t count)
     count -= n;
   }
 
-  /* count less than 0 means we've read too much
-     and it should not happend */
-  assert(count == 0);
-
   return index;
 }
 
@@ -148,4 +147,37 @@ char * strndup(const char *s, size_t n)
   char *r = xmalloc(n);
 
   return strncpy(r, s, n);
+}
+
+/* skip 'size' bytes in a file
+   return  0 on success,
+          -1 on error    */
+int skip(int fd, off_t size)
+{
+  /* first we try the usual way with lseek */
+  if(lseek64(fd, size, SEEK_CUR) >= 0)
+    return 0;
+
+  /* seek failed but it may be because
+     fd is associated with a pipe, socket or FIFO
+     in such a case we have to make dummy reads
+     until we read enough ignored byte */
+  if(errno == ESPIPE) {
+    while(size) {
+      /* although this is a dummy read
+         we afford a full sized io buffer
+         to avoid switching context uselessly */
+      char dummy[IO_SZ];
+      ssize_t n;
+
+      n = xxread(fd, dummy, MIN(size, IO_SZ));
+
+      size -= n;
+    }
+
+    return 0;
+  }
+
+  /* anything else is a real error */
+  return -1;
 }

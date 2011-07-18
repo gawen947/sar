@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-18 18:25:28 gawen>
+   Time-stamp: <2011-07-18 18:59:56 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -1019,7 +1019,7 @@ struct sar_file * sar_read(const char *path,
 
 static void read_regular(struct sar_file *out, mode_t mode)
 {
-  char iobuf[IO_SIZE];
+  char iobuf[IO_SZ];
   enum fsclass class;
   off_t size;
   int fd;
@@ -1055,7 +1055,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
   /* when we list the archive we don't want to read
      to whole file */
   if(out->list_only) {
-    lseek64(out->fd, size, SEEK_CUR);
+    xskip(out->fd, size);
     return;
   }
 
@@ -1066,7 +1066,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
   /* read file */
   while(size) {
-    size_t n = MIN(size, IO_SIZE);
+    size_t n = MIN(size, IO_SZ);
 
     xcrc_read(out, iobuf, n);
 
@@ -1141,7 +1141,7 @@ static void read_device(struct sar_file *out, mode_t mode)
 
   /* avoid reading when listing the archive */
   if(out->list_only) {
-    lseek64(out->fd, sizeof(dev), SEEK_CUR);
+    xskip(out->fd, sizeof(dev));
     return;
   }
 
