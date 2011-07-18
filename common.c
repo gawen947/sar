@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-07-16 21:18:37 gawen>
+   Time-stamp: <2011-07-18 18:16:36 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -123,10 +123,24 @@ size_t n_strncpy(char *dest, const char *src, size_t n)
 
 ssize_t xxread(int fd, void *buf, size_t count)
 {
-  ssize_t n = read(fd, buf, count);
-  if(n != count)
-    err(EXIT_FAILURE, "IO read error or inconsistent archive");
-  return n;
+  size_t index = 0;
+
+  /* read until we have the desired size */
+  while(count) {
+    ssize_t n = read(fd, buf + index, count);
+
+    if(n <= 0)
+      err(EXIT_FAILURE, "IO read error or inconsistent archive");
+
+    index += n;
+    count -= n;
+  }
+
+  /* count less than 0 means we've read too much
+     and it should not happend */
+  assert(count == 0);
+
+  return index;
 }
 
 char * strndup(const char *s, size_t n)

@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-18 15:46:15 gawen>
+   Time-stamp: <2011-07-18 18:18:10 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -1065,7 +1065,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
     err(EXIT_FAILURE, "could not open output file \"%s\"", out->wp);
 
   /* read file */
-  while(size > 0) {
+  while(size) {
     size_t n = MIN(size, IO_SIZE);
 
     xcrc_read(out, iobuf, n);
@@ -1076,8 +1076,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
     size -= n;
   }
 
-  if(size < 0)
-    errx(EXIT_FAILURE, "inconsistent archive");
+  assert(size == 0);
 
   close(fd);
 }
