@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-07-18 13:49:21 gawen>
+   Time-stamp: <2011-07-18 14:52:25 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -86,34 +86,34 @@ struct sar_hardlink {
 
 /* mode related flags */
 /* file format flags */
-#define M_IFMT  0x7    /* bit mask for file type bit fields */
-#define M_IREG  0x0    /* regular file */
-#define M_IDIR  0x1    /* directory */
-#define M_ILNK  0x2    /* link */
-#define M_IFIFO 0x3    /* fifo */
-#define M_IBLK  0x4    /* block device */
-#define M_ICHR  0x5    /* character device */
-#define M_IHARD 0x6    /* hardlink */
-#define M_ICTRL 0x7    /* control node */
+#define M_IFMT           0x7 /* bit mask for file type bit fields */
+enum mformat { M_IREG  = 0x0, /* regular file */
+               M_IDIR  = 0x1, /* directory */
+               M_ILNK  = 0x2, /* link */
+               M_IFIFO = 0x3, /* fifo */
+               M_IBLK  = 0x4, /* block device */
+               M_ICHR  = 0x5, /* character device */
+               M_IHARD = 0x6, /* hardlink */
+               M_ICTRL = 0x7, /* control node */ };
 
 /* permission flags */
-#define M_IPERM 0xfff8 /* bit maks for permission type bit fields */
-#define M_ISUID 0x8    /* set UID bit */
-#define M_ISGID 0x10   /* set-group-ID bit */
-#define M_ISVTX 0x20   /* sticky bit */
-#define M_IRUSR 0x40   /* owner has read permission */
-#define M_IWUSR 0x80   /* owner has write permission */
-#define M_IXUSR 0x100  /* owner has execute permission */
-#define M_IRGRP 0x200  /* group has read permission */
-#define M_IWGRP 0x400  /* group has write permission */
-#define M_IXGRP 0x800  /* group has execute permission */
-#define M_IROTH 0x1000 /* other has read permission */
-#define M_IWOTH 0x2000 /* other has write permission */
-#define M_IXOTH 0x4000 /* other has execute permission */
+#define M_IPERM        0xfff8 /* bit maks for permission type bit fields */
+enum mperm { M_ISUID = 0x8,    /* set UID bit */
+             M_ISGID = 0x10,   /* set-group-ID bit */
+             M_ISVTX = 0x20,   /* sticky bit */
+             M_IRUSR = 0x40,   /* owner has read permission */
+             M_IWUSR = 0x80,   /* owner has write permission */
+             M_IXUSR = 0x100,  /* owner has execute permission */
+             M_IRGRP = 0x200,  /* group has read permission */
+             M_IWGRP = 0x400,  /* group has write permission */
+             M_IXGRP = 0x800,  /* group has execute permission */
+             M_IROTH = 0x1000, /* other has read permission */
+             M_IWOTH = 0x2000, /* other has write permission */
+             M_IXOTH = 0x4000, /* other has execute permission */ };
 
 /* control mode flags */
-#define M_C_CHILD  0x0 /* end of children */
-#define M_C_IGNORE 0x8 /* unsupported file type or dummy */
+enum mctrl { M_C_CHILD  = 0x0, /* end of children */
+             M_C_IGNORE = 0x8, /* unsupported file type or dummy */ };
 
 /* file types macro */
 #define M_IS(m, t) ((m & M_IFMT) == M_I ## t)
