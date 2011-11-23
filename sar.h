@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-11-23 15:55:35 gawen>
+   Time-stamp: <2011-11-23 16:53:23 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -127,9 +127,9 @@ enum mctrl { M_C_CHILD  = 0x0, /* end of children */
 #define M_ISCTRL(m) M_IS(m, CTRL)
 
 /* archive flags */
-#define A_IMASK   A_ICRC | A_INTIME /* flags mask */
-#define A_ICRC    0x1               /* use a checksum for each file */
-#define A_INTIME  0x2               /* use nanosecond timestamp */
+#define A_ICRC    0x1                 /* use a checksum for each file */
+#define A_INTIME  0x2                 /* use nanosecond timestamp */
+#define A_IMASK   (A_ICRC | A_INTIME) /* flags mask */
 #define A_HAS(a, t)    ((a->flags) & A_I ## t)
 #define A_HAS_CRC(a)    A_HAS(a, CRC)
 #define A_HAS_NTIME(a)  A_HAS(a, NTIME)

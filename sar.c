@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-11-23 16:09:03 gawen>
+   Time-stamp: <2011-11-23 16:53:09 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -52,6 +52,9 @@
 #include "common.h"
 #include "crc32.h"
 #include "sar.h"
+
+/* TODO:
+   - use openat */
 
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
@@ -1019,7 +1022,7 @@ struct sar_file * sar_read(const char *path,
   /* extract flags */
   xxread(out->fd, &out->flags, sizeof(out->flags));
 
-  if(out->flags & (~A_IMASK))
+  if(out->flags & ~A_IMASK)
     errx(EXIT_FAILURE, "unknown flags found (%x)", out->flags);
 
   /* for debugging purpose */
