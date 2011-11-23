@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-07-18 23:33:56 gawen>
+   Time-stamp: <2011-11-15 13:06:07 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -53,6 +53,10 @@
 #include "crc32.h"
 #include "sar.h"
 
+/* TODO:
+ *  - A_HAS_FAST
+ *  - code to check complementary flags for unknown flags */
+
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
 static void free_hardlinks(struct sar_file *out);
@@ -86,6 +90,7 @@ struct sar_file * sar_creat(const char *path,
                             const char *compress,
                             bool use_crc,
                             bool use_ntime,
+                            bool use_fast,
                             unsigned int verbose)
 {
   uint32_t magik = MAGIK;
@@ -100,6 +105,8 @@ struct sar_file * sar_creat(const char *path,
     out->flags |= A_ICRC;
   if(use_ntime)
     out->flags |= A_INTIME;
+  if(use_fast)
+    out->flags |= A_IFAST;
 
   if(!path)
     out->fd = STDOUT_FILENO;
@@ -1512,10 +1519,12 @@ void sar_list(struct sar_file *out)
 void sar_info(struct sar_file *out)
 {
   printf("SAR file:\n"
-         "\tVersion        : %d\n"
-         "\tHas CRC        : %s\n"
-         "\tHas nano time  : %s\n",
+         "\tVersion          : %d\n"
+         "\tHas CRC          : %s\n"
+         "\tHas nano time    : %s\n",
+         "\THas fast headers : %s\n",
          out->version,
          S_BOOLEAN(A_HAS_CRC(out)),
-         S_BOOLEAN(A_HAS_NTIME(out)));
+         S_BOOLEAN(A_HAS_NTIME(out)),
+         S_BOOLEAN(A_HAS_FAST(out));
 }

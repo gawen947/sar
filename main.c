@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-07-18 22:42:51 gawen>
+   Time-stamp: <2011-11-23 15:19:27 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -336,10 +336,6 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
      !(val->mode == MD_CREATE))
     errx(EXIT_FAILURE, "Options 'CN' are only availables with 'c' option\n"
          "Try '%s --help'", pgn);
-
-#ifndef DISABLE_EGGS
-    q0(val->verbose);
-#endif /* EGGS */
 }
 
 int main(int argc, char *argv[])
