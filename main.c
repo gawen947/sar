@@ -39,7 +39,6 @@
 #include <time.h>
 #include <err.h>
 
-#include "egg.h"
 #include "sar.h"
 #include "common.h"
 
