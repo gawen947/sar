@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-11-23 16:53:09 gawen>
+   Time-stamp: <2011-11-23 17:31:28 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -54,7 +54,7 @@
 #include "sar.h"
 
 /* TODO:
-   - use openat */
+   - use *at system calls */
 
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
@@ -137,6 +137,11 @@ struct sar_file * sar_creat(const char *path,
     out->fd = fd[1];
   }
 
+  /* store the canonicalized absolute pathname */
+  out->out_path = xmalloc(WP_MAX);
+  out->wp_path  = xmalloc(WP_MAX);
+  realpath(path, out->out_path);
+
   /* write magik number and flags
      notice we convert magik to little endian first
      flags which is 1 byte wide is not converted though */
@@ -166,6 +171,8 @@ void sar_close(struct sar_file *file)
     errx(EXIT_FAILURE, "failed to compress");
 
   close(file->fd);
+  free(file->out_path);
+  free(file->wp_path);
 }
 
 void sar_add(struct sar_file *out, const char *path)
@@ -677,6 +684,13 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   uint16_t mode, s_mode;
   uint8_t s_nsclass;
 
+  /* ensure that this file is not the archive
+     itself, if it is we do not complain
+     and just skip this node */
+  realpath(out->wp, out->wp_path);
+  if(strtest(out->wp_path, out->out_path))
+    return 0;
+
   /* stat the file first to reupdate access time later */
   if(lstat(out->wp, &out->stat) < 0) {
     warn("could not stat \"%s\"", out->wp);
@@ -1011,6 +1025,11 @@ struct sar_file * sar_read(const char *path,
     out->fd = fd[0];
   }
 
+  /* store the canonicalized absolute pathname */
+  out->out_path = xmalloc(WP_MAX);
+  out->wp_path  = xmalloc(WP_MAX);
+  realpath(path, out->out_path);
+
   /* check magik number */
   xxread(out->fd, &magik, sizeof(magik));
 
@@ -1209,6 +1228,13 @@ static int rec_extract(struct sar_file *out, size_t idx)
   uint32_t crc;
   uint16_t mode;
   uint8_t size, i;
+
+  /* ensure that this file is not the archive
+     itself, if it is we do not complain
+     and just skip this node */
+  realpath(out->wp, out->wp_path);
+  if(strtest(out->wp_path, out->out_path))
+    return 0;
 
   /* setup crc and fallback variables we don't
      care if we compute it or not */

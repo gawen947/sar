@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-11-23 16:53:23 gawen>
+   Time-stamp: <2011-11-23 17:16:32 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -62,6 +62,9 @@ struct sar_file {
   unsigned int verbose;    /* verbose level */
   bool list_only;          /* do not extract file skip them instead */
 
+
+  char *out_path;          /* canonicalized absolute pathname to the archive */
+  char *wp_path;           /* canonicalized absolute pathname to the wp */
   char *wp;                /* working path */
   size_t wp_sz;            /* working path size */
   size_t wp_idx;           /* working path index */
@@ -71,7 +74,6 @@ struct sar_file {
   uint32_t crc;            /* current crc */
   char *link;              /* symlink or hardlink destination */
   off_t size;              /* size of a node */
-
 
   struct sar_hardlink *hl_tbl; /* hard link table */
   size_t hl_tbl_sz;

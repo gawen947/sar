@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-07-18 19:00:31 gawen>
+   Time-stamp: <2011-11-23 17:21:42 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -28,6 +28,7 @@
    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
    SUCH DAMAGE. */
 
+#include <stdbool.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -143,6 +144,15 @@ ssize_t xxread(int fd, void *buf, size_t count)
   }
 
   return index;
+}
+
+/* exact comparison between two strings */
+bool strtest(const char *a, const char *b)
+{
+  for(; *a == *b ; a++, b++)
+    if(*a == '\0')
+      return true;
+  return false;
 }
 
 char * strndup(const char *s, size_t n)
