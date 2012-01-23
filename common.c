@@ -168,7 +168,11 @@ char * strndup(const char *s, size_t n)
 int skip(int fd, off_t size)
 {
   /* first we try the usual way with lseek */
+#ifdef __FreeBSD__
+  if(lseek(fd, size, SEEK_CUR) >= 0)
+#else
   if(lseek64(fd, size, SEEK_CUR) >= 0)
+#endif /* __FreeBSD__ */
     return 0;
 
   /* seek failed but it may be because

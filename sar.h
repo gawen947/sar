@@ -54,6 +54,19 @@
                                     in magik number */
 #define MAGIK      (0x00524153 | MAGIK_VERSION)
 
+#ifndef S_IFMT
+/* File type */
+# define S_IFMT          0170000         /* [XSI] type of file mask */
+# define S_IFIFO         0010000         /* [XSI] named pipe (fifo) */
+# define S_IFCHR         0020000         /* [XSI] character special */
+# define S_IFDIR         0040000         /* [XSI] directory */
+# define S_IFBLK         0060000         /* [XSI] block special */
+# define S_IFREG         0100000         /* [XSI] regular */
+# define S_IFLNK         0120000         /* [XSI] symbolic link */
+# define S_IFSOCK        0140000         /* [XSI] socket */
+# define S_ISVTX         0001000
+#endif /* S_IFMT */
+
 struct sar_file {
   int fd;                  /* file descriptor of the archive */
   uint8_t flags;           /* flags of this archive */

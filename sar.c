@@ -39,7 +39,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-#include <endian.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <utime.h>
@@ -47,6 +46,12 @@
 #include <err.h>
 #include <pwd.h>
 #include <grp.h>
+
+#ifdef __FreeBSD__
+#include <sys/endian.h>
+#else
+#include <endian.h>
+#endif /* __FreeBSD__ */
 
 #include "translation.h"
 #include "common.h"
@@ -921,6 +926,19 @@ CRC:
 
 static void reupdate_time(const struct sar_file *out)
 {
+#ifdef __FreeBSD__
+  /* FreeBSD doesn't seems to support nanosecond timestamp
+     therefore we use a microsecond timestamp instead */
+  struct timeval times[2];
+
+  times[0].tv_sec  = out->stat.st_atime;
+  times[0].tv_usec = out->stat.st_atim.tv_nsec / 1000;
+  
+  times[1].tv_sec  = out->stat.st_mtime;
+  times[1].tv_usec = out->stat.st_mtim.tv_nsec / 1000;
+
+  lutimes(out->wp, times);
+#else
   struct timespec times[2];
 
   times[0].tv_sec  = out->stat.st_atime;
@@ -930,6 +948,7 @@ static void reupdate_time(const struct sar_file *out)
   times[1].tv_nsec = out->stat.st_mtim.tv_nsec;
 
   utimensat(AT_FDCWD, out->wp, times, AT_SYMLINK_NOFOLLOW);
+#endif /* __FreeBSD__ */
 }
 
 static void rec_add(struct sar_file *out, const char *node)
@@ -1055,7 +1074,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
 {
   char iobuf[IO_SZ];
   enum fsclass class;
-  off_t size;
+  off_t size = 0;
   int fd;
 
   /* read size first */
@@ -1125,7 +1144,7 @@ static void read_link(struct sar_file *out, mode_t mode)
 {
   char path[WP_MAX + 1];
   enum fsclass class;
-  uint16_t size;
+  uint16_t size = 0;
 
   /* read link length */
   class = out->nsclass & N_FILE;
@@ -1420,10 +1439,6 @@ EXTRACT_NAME:
   /* extract name size, size is one byte so
      we don't do the endianess conversion */
   xcrc_read(out, &size, sizeof(size));
-
-  /* checkup size and extract name */
-  if(size > NODE_MAX)
-    errx(EXIT_FAILURE, "node max size exceeded");
   xcrc_read(out, name, size);
 
 #ifndef DISABLE_WP_WIDTH_CHECK
@@ -1470,15 +1485,29 @@ EXTRACT_NAME:
       chmod(out->wp, real_mode);
 
     if(A_HAS_NTIME(out)) {
-      struct timespec times[2];
+#ifdef __FreeBSD__
+      /* FreeBSD doesn't seems to support nanosecond timestamp
+         therefore we use a microsecond timestamp instead */
+      struct timeval times[2];
 
       times[0].tv_sec  = atime;
-      times[0].tv_nsec = (long)atime_ns;
-
+      times[0].tv_usec = (long)atime_ns;
+  
       times[1].tv_sec  = mtime;
-      times[1].tv_nsec = (long)mtime_ns;
+      times[1].tv_usec = (long)mtime_ns;
+
+      lutimes(out->wp, times);
+#else
+      struct timespec times[2];
+
+      times[0].tv_sec  = out->stat.st_atime;
+      times[0].tv_nsec = out->stat.st_atim.tv_nsec;
+
+      times[1].tv_sec  = out->stat.st_mtime;
+      times[1].tv_nsec = out->stat.st_mtim.tv_nsec;
 
       utimensat(AT_FDCWD, out->wp, times, AT_SYMLINK_NOFOLLOW);
+#endif /* __FreeBSD__ */
     }
     else {
       struct utimbuf times;
