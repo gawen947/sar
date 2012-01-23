@@ -30,8 +30,12 @@ ifneq "$(wildcard config.h)" ""
 CFLAGS += -DHAVE_CONFIG=1
 endif
 
-CFLAGS += -D_BSD_SOURCE=1 -D_LARGEFILE64_SOURCE=1
-#CFLAGS += -D_BSD_SOURCE=1 -D_POSIX_C_SOURCE=200809L -D_LARGEFILE64_SOURCE=1
+system = $(shell uname -o)
+ifneq ($(system), FreeBSD)
+CFLAGS += -D_BSD_SOURCE=1 -D_POSIX_C_SOURCE=200809L -D_LARGEFILE64_SOURCE=1
+else
+CFLAGS += -D_BSD_SOURCE=1
+endif
 
 .PHONY: all clean
 
