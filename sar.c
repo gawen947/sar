@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2012-02-26 22:18:03 gawen>
+   Time-stamp: <2012-02-27 00:19:16 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -63,7 +63,6 @@
 
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
-static void free_hardlinks(struct sar_file *out);
 static int add_node(struct sar_file *out, mode_t *mode, const char *name);
 static void reupdate_time(const struct sar_file *out);
 static void rec_add(struct sar_file *out, const char *node);
@@ -81,12 +80,41 @@ static void read_link(struct sar_file *out, mode_t mode);
 static void read_fifo(struct sar_file *out, mode_t mode);
 static void read_device(struct sar_file *out, mode_t mode);
 static void read_hardlink(struct sar_file *out, mode_t mode);
-static void clean_hardlinks(struct sar_file *out);
 static char * watch_inode(struct sar_file *out);
 static void show_file(const struct sar_file *out, const char *path,
                       const char *link, mode_t mode, uint16_t sar_mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
                       time_t mtime, uint32_t crc, bool display_crc);
+
+/* Based on Van Jacobson and Knuth integer hash */
+static uint32_t hl_hash(const void *key)
+{
+  const struct sar_hardlink *hl = key;
+  uint32_t a = hl->inode;
+  uint32_t b = hl->device;
+
+  a ^= (a >> 23) ^ (a >> 17);
+  b *= 0x9e3779b1;
+
+  return (a ^ b);
+}
+
+static bool hl_compare(const void *a, const void *b)
+{
+  const struct sar_hardlink *hl_a = a;
+  const struct sar_hardlink *hl_b = b;
+
+  return (hl_a->inode == hl_b->inode) && \
+         (hl_a->device == hl_b->device);
+}
+
+static void hl_destroy(void *data)
+{
+  struct sar_hardlink *hl = data;
+
+  free(hl->path);
+  free(hl);
+}
 
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
@@ -197,9 +225,7 @@ void sar_add(struct sar_file *out, const char *path)
   size_t i;
 
   /* create hard link table */
-  out->hl_tbl    = xmalloc(HL_TBL_SZ * sizeof(struct sar_hardlink));
-  out->hl_tbl_sz = HL_TBL_SZ;
-  clean_hardlinks(out);
+  out->hl_tbl    = ht_create(HL_TBL_SZ, hl_hash, hl_compare, hl_destroy);
 
   /* now we may create the working path
      this is the one we will use in the future */
@@ -252,8 +278,7 @@ CLEAN:
   while(nb_nodes--)
     write_control(out, M_C_CHILD);
 
-  free_hardlinks(out);
-  free(out->hl_tbl);
+  ht_destroy(out->hl_tbl);
   free(out->wp);
 
   UNPTR(out->hl_tbl);
@@ -275,70 +300,28 @@ static void xcrc_read(struct sar_file *out, void *buf, size_t count)
     out->crc = crc32(buf, out->crc, count);
 }
 
-static void clean_hardlinks(struct sar_file *out)
-{
-  size_t i;
-
-  for(i = 0 ; i < out->hl_tbl_sz ; i++)
-    out->hl_tbl[i].path = NULL;
-}
-
-static void free_hardlinks(struct sar_file *out)
-{
-  size_t i;
-
-  for(i = 0 ; i < out->hl_tbl_sz ; i++)
-    if(out->hl_tbl[i].path)
-      free(out->hl_tbl[i].path);
-}
-
 static char * watch_inode(struct sar_file *out)
 {
   assert(out);
   assert(out->hl_tbl);
 
-  long i        = out->hl_tbl_sz;
-  long null_idx = -1;
+  struct sar_hardlink *key = xmalloc(sizeof(struct sar_hardlink));
+  struct sar_hardlink *hl;
 
-  /* search for hardlink */
-  while(i--) {
-    if(!out->hl_tbl[i].path)
-      null_idx = i;
-    else if(out->hl_tbl[i].inode  == out->stat.st_ino &&
-            out->hl_tbl[i].device == out->stat.st_dev) {
-      char *path = strdup(out->hl_tbl[i].path);
+  key->inode  = out->stat.st_ino;
+  key->device = out->stat.st_dev;
+  hl = ht_search(out->hl_tbl, key, NULL);
 
-      out->hl_tbl[i].links--;
-
-      if(out->hl_tbl[i].links <= 0) {
-        free(out->hl_tbl[i].path);
-        out->hl_tbl[i].path = NULL;
-      }
-
-      return path;
-    }
+  if(hl) {
+    hl->links--;
+    if(hl->links <= 0)
+      ht_delete(out->hl_tbl, key);
+    return strdup(hl->path);
+  } else {
+    key->links  = out->stat.st_nlink;
+    key->path   = strdup(out->wp);
+    ht_search(out->hl_tbl, key, key);
   }
-
-  /* search for a empty index  */
-  if(null_idx < 0) {
-    long i = out->hl_tbl_sz;
-
-    /* reallocate */
-    out->hl_tbl_sz += HL_TBL_SZ;
-    out->hl_tbl = xrealloc(out->hl_tbl,
-                           out->hl_tbl_sz * sizeof(struct sar_hardlink));
-
-    /* clean last elements */
-    for(; i < out->hl_tbl_sz ; i++)
-      out->hl_tbl[i].path = NULL;
-
-    null_idx = i - 1;
-  }
-
-  out->hl_tbl[null_idx].inode  = out->stat.st_ino;
-  out->hl_tbl[null_idx].device = out->stat.st_dev;
-  out->hl_tbl[null_idx].links  = out->stat.st_nlink;
-  out->hl_tbl[null_idx].path   = strdup(out->wp);
 
   return NULL;
 }

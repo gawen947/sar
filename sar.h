@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2011-11-23 17:16:32 gawen>
+   Time-stamp: <2012-02-26 23:03:47 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -35,6 +35,7 @@
 #include <stdbool.h>
 #include <limits.h>
 
+#include "htable.h"
 #include "iobuf.h"
 
 #ifdef HAVE_CONFIG
@@ -91,8 +92,7 @@ struct sar_file {
   char *link;              /* symlink or hardlink destination */
   off_t size;              /* size of a node */
 
-  struct sar_hardlink *hl_tbl; /* hard link table */
-  size_t hl_tbl_sz;
+  htable_t hl_tbl;         /* hard link table */
 };
 
 struct sar_hardlink {
@@ -190,8 +190,8 @@ enum tsclass { N_TS32 = 0x0,  /* same 32bits time size class (4 Bytes) */
 enum max     { WP_MAX = 4095,
                NODE_MAX = 255,
                DATE_MAX = 255 };
-enum size    { HL_TBL_SZ = 1024,
-               IO_SZ     = 65536 };
+enum size    { HL_TBL_SZ = 256,
+               IO_SZ     = 1024 * 1024 };
 
 /* misc. */
 #define DATE_FORMAT "%d %b %Y %H:%M"
