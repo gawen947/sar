@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2011-11-23 17:21:42 gawen>
+   Time-stamp: <2012-02-26 21:23:46 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -40,6 +40,7 @@
 #include <err.h>
 
 #include "sar.h"
+#include "iobuf.h"
 #include "common.h"
 
 #define SAFE_CALL0(name, erron, msg, ret)       \
@@ -81,14 +82,18 @@ SAFE_CALL2(stat, < 0, "IO stat error", int, const char *, struct stat *)
 SAFE_CALL2(dup2, < 0, "cannot duplicate file descriptors", int, int, int)
 SAFE_CALL2(getcwd, == NULL, "cannot get current working directory", char *,
            char *, size_t)
-SAFE_CALL2(skip, < 0, "cannot seek", int, int, off_t)
+SAFE_CALL2(iobuf_skip, < 0, "cannot seek", int, iofile_t, off_t)
 SAFE_CALL2(readlink_malloc_n, == NULL, "IO readlink error", char *,
            const char *, ssize_t *)
 SAFE_CALL2(utime, < 0, "IO chattr error", int, const char *,
            const struct utimbuf *)
 
 SAFE_CALL3(read, < 0, "IO read error", ssize_t, int, void *, size_t)
-SAFE_CALL3(write, <= 0, "IO write error", ssize_t, int, const void *, size_t)
+SAFE_CALL3(write, < 0, "IO read error", ssize_t, int, const void *, size_t)
+SAFE_CALL3(iobuf_read, < 0, "iobuf read error", ssize_t, iofile_t, void *,
+           size_t)
+SAFE_CALL3(iobuf_write, <= 0, "iobuf write error", ssize_t, iofile_t,
+           const void *, size_t)
 SAFE_CALL3(chown, < 0, "IO chown error", int, const char *, uid_t, gid_t)
 
 char * readlink_malloc_n(const char *filename, ssize_t *n)
@@ -128,13 +133,13 @@ size_t n_strncpy(char *dest, const char *src, size_t n)
   return i;
 }
 
-ssize_t xxread(int fd, void *buf, size_t count)
+ssize_t xxiobuf_read(iofile_t file, void *buf, size_t count)
 {
   size_t index = 0;
 
   /* read until we have the desired size */
   while(count) {
-    ssize_t n = read(fd, buf + index, count);
+    ssize_t n = iobuf_read(file, buf + index, count);
 
     if(n <= 0)
       err(EXIT_FAILURE, "IO read error or inconsistent archive");
@@ -165,13 +170,13 @@ char * strndup(const char *s, size_t n)
 /* skip 'size' bytes in a file
    return  0 on success,
           -1 on error    */
-int skip(int fd, off_t size)
+int iobuf_skip(iofile_t file, off_t size)
 {
   /* first we try the usual way with lseek */
 #ifdef __FreeBSD__
-  if(lseek(fd, size, SEEK_CUR) >= 0)
+  if(iobuf_lseek(file, size, SEEK_CUR) >= 0)
 #else
-  if(lseek64(fd, size, SEEK_CUR) >= 0)
+  if(iobuf_lseek64(file, size, SEEK_CUR) >= 0)
 #endif /* __FreeBSD__ */
     return 0;
 
@@ -187,7 +192,7 @@ int skip(int fd, off_t size)
       char dummy[IO_SZ];
       ssize_t n;
 
-      n = xxread(fd, dummy, MIN(size, IO_SZ));
+      n = xxiobuf_read(file, dummy, MIN(size, IO_SZ));
 
       size -= n;
     }

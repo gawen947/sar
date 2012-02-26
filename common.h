@@ -1,5 +1,5 @@
 /* File: common.h
-   Time-stamp: <2011-07-15 08:50:50 gawen>
+   Time-stamp: <2012-02-26 20:02:41 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -37,6 +37,8 @@
 #include <unistd.h>
 #include <utime.h>
 
+#include "sar.h"
+
 #define IO_SIZE   32768
 #define DNAME_MAX 1024
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
@@ -55,7 +57,7 @@ char * readlink_malloc_n(const char *filename, ssize_t *n);
 size_t n_strncpy(char *dest, const char *src, size_t n);
 char * strndup(const char *s, size_t n);
 bool strtest(const char *a, const char *b);
-int skip(int fd, off_t size);
+int iobuf_skip(iofile_t file, off_t size);
 
 int xfork();
 int xpipe(int pipefd[2]);
@@ -65,8 +67,10 @@ void * xmalloc(size_t size);
 void * xrealloc(void *ptr, size_t size);
 ssize_t xwrite(int fd, const void *buf, size_t count);
 ssize_t xread(int fd, void *buf, size_t count);
-ssize_t xxread(int fd, void *buf, size_t count);
-int xskip(int fd, off_t size);
+ssize_t xiobuf_write(iofile_t file, const void *buf, size_t count);
+ssize_t xiobuf_read(iofile_t file, void *buf, size_t count);
+ssize_t xxiobuf_read(iofile_t file, void *buf, size_t count);
+int xiobuf_skip(iofile_t file, off_t size);
 int xstat(const char *path, struct stat *buf);
 int xchown(const char *path, uid_t owner, gid_t group);
 char * xreadlink_malloc_n(const char *filename, ssize_t *n);

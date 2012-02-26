@@ -35,6 +35,8 @@
 #include <stdbool.h>
 #include <limits.h>
 
+#include "iobuf.h"
+
 #ifdef HAVE_CONFIG
 #include "config.h"
 #endif /* HAVE_CONFIG */
@@ -69,6 +71,7 @@
 
 struct sar_file {
   int fd;                  /* file descriptor of the archive */
+  iofile_t file;           /* file stream of the archive */
   uint8_t flags;           /* flags of this archive */
   uint8_t version;         /* version of sar archive */
 

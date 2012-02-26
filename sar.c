@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2011-11-23 17:31:28 gawen>
+   Time-stamp: <2012-02-26 20:44:25 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -142,6 +142,8 @@ struct sar_file * sar_creat(const char *path,
     out->fd = fd[1];
   }
 
+  out->file = iobuf_dopen(out->fd);
+
   /* store the canonicalized absolute pathname */
   out->out_path = xmalloc(WP_MAX);
   out->wp_path  = xmalloc(WP_MAX);
@@ -151,8 +153,8 @@ struct sar_file * sar_creat(const char *path,
      notice we convert magik to little endian first
      flags which is 1 byte wide is not converted though */
   s_magik = htole32(magik);
-  xwrite(out->fd, &s_magik, sizeof(s_magik));
-  xwrite(out->fd, &out->flags, sizeof(out->flags));
+  xiobuf_write(out->file, &s_magik, sizeof(s_magik));
+  xiobuf_write(out->file, &out->flags, sizeof(out->flags));
 
   /* for debugging purpose */
   UNPTR(out->wp);
@@ -175,7 +177,7 @@ void sar_close(struct sar_file *file)
   if(status)
     errx(EXIT_FAILURE, "failed to compress");
 
-  close(file->fd);
+  iobuf_close(file->file);
   free(file->out_path);
   free(file->wp_path);
 }
@@ -183,7 +185,7 @@ void sar_close(struct sar_file *file)
 void sar_add(struct sar_file *out, const char *path)
 {
   assert(out);
-  assert(out->fd);
+  assert(out->file);
   assert(!out->wp);
   assert(path);
 
@@ -259,12 +261,12 @@ static void crc_write(struct sar_file *out, const void *buf, size_t count)
 {
   if(A_HAS_CRC(out))
     out->crc = crc32(buf, out->crc, count);
-  xwrite(out->fd, buf, count);
+  xiobuf_write(out->file, buf, count);
 }
 
 static void xcrc_read(struct sar_file *out, void *buf, size_t count)
 {
-  xxread(out->fd, buf, count);
+  xxiobuf_read(out->file, buf, count);
 
   if(A_HAS_CRC(out))
     out->crc = crc32(buf, out->crc, count);
@@ -490,7 +492,7 @@ static void write_control(struct sar_file *out, uint16_t id)
 {
   uint16_t control = htole16(M_ICTRL | id);
 
-  xwrite(out->fd, &control, sizeof(control));
+  xiobuf_write(out->file, &control, sizeof(control));
 }
 
 static void write_name(struct sar_file *out, const char *name)
@@ -904,7 +906,7 @@ CRC:
   /* write crc if needed */
   if(A_HAS_CRC(out)) {
     uint32_t s_crc = htole32(out->crc);
-    xwrite(out->fd, &s_crc, sizeof(s_crc));
+    xiobuf_write(out->file, &s_crc, sizeof(s_crc));
   }
 
   /* update remote mode */
@@ -933,7 +935,7 @@ static void reupdate_time(const struct sar_file *out)
 
   times[0].tv_sec  = out->stat.st_atime;
   times[0].tv_usec = out->stat.st_atim.tv_nsec / 1000;
-  
+
   times[1].tv_sec  = out->stat.st_mtime;
   times[1].tv_usec = out->stat.st_mtim.tv_nsec / 1000;
 
@@ -1044,13 +1046,15 @@ struct sar_file * sar_read(const char *path,
     out->fd = fd[0];
   }
 
+  out->file = iobuf_dopen(out->fd);
+
   /* store the canonicalized absolute pathname */
   out->out_path = xmalloc(WP_MAX);
   out->wp_path  = xmalloc(WP_MAX);
   realpath(path, out->out_path);
 
   /* check magik number */
-  xxread(out->fd, &magik, sizeof(magik));
+  xxiobuf_read(out->file, &magik, sizeof(magik));
 
   if(magik != MAGIK)
     errx(EXIT_FAILURE, "incompatible magik number");
@@ -1058,7 +1062,7 @@ struct sar_file * sar_read(const char *path,
   out->version = magik & MAGIK_FMT_VER;
 
   /* extract flags */
-  xxread(out->fd, &out->flags, sizeof(out->flags));
+  xxiobuf_read(out->file, &out->flags, sizeof(out->flags));
 
   if(out->flags & ~A_IMASK)
     errx(EXIT_FAILURE, "unknown flags found (%x)", out->flags);
@@ -1108,7 +1112,7 @@ static void read_regular(struct sar_file *out, mode_t mode)
   /* when we list the archive we don't want to read
      to whole file */
   if(out->list_only) {
-    xskip(out->fd, size);
+    xiobuf_skip(out->file, size);
     return;
   }
 
@@ -1194,7 +1198,7 @@ static void read_device(struct sar_file *out, mode_t mode)
 
   /* avoid reading when listing the archive */
   if(out->list_only) {
-    xskip(out->fd, sizeof(dev));
+    xiobuf_skip(out->file, sizeof(dev));
     return;
   }
 
@@ -1231,7 +1235,7 @@ static void read_hardlink(struct sar_file *out, mode_t mode)
 static int rec_extract(struct sar_file *out, size_t idx)
 {
   assert(out);
-  assert(out->fd);
+  assert(out->file);
   assert(out->wp);
 
   char name[NODE_MAX + 1];
@@ -1492,7 +1496,7 @@ EXTRACT_NAME:
 
       times[0].tv_sec  = atime;
       times[0].tv_usec = (long)atime_ns;
-  
+
       times[1].tv_sec  = mtime;
       times[1].tv_usec = (long)mtime_ns;
 
@@ -1520,7 +1524,7 @@ EXTRACT_NAME:
 
   /* compute crc */
   if(A_HAS_CRC(out)) {
-    xxread(out->fd, &crc, sizeof(crc));
+    xxiobuf_read(out->file, &crc, sizeof(crc));
     crc = le32toh(crc);
 
     if(!out->list_only && crc != out->crc)
@@ -1550,7 +1554,7 @@ EXTRACT_NAME:
 void sar_extract(struct sar_file *out)
 {
   assert(out);
-  assert(out->fd);
+  assert(out->file);
   assert(!out->wp);
 
   /* create the working path
