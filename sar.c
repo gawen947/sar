@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2012-02-26 21:55:55 gawen>
+   Time-stamp: <2012-02-26 22:18:03 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -171,13 +171,16 @@ void sar_close(struct sar_file *file)
 
   int status = 0;
 
+  /* We have to close this file before waiting the
+     compressor to avoid a deadlock */
+  iobuf_close(file->file);
+
   /* we need to wait for compression child to return */
   wait(&status);
 
   if(status)
     errx(EXIT_FAILURE, "failed to compress");
 
-  iobuf_close(file->file);
   free(file->out_path);
   free(file->wp_path);
 }

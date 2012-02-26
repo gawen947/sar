@@ -340,7 +340,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
 int main(int argc, char *argv[])
 {
   struct opts_val val = {0};
-  struct sar_file *f;
+  struct sar_file *f  = NULL;
 
   opt_value = &val;
   atexit(clean_exit);
