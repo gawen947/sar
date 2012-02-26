@@ -1,5 +1,5 @@
 /* File: main.c
-   Time-stamp: <2011-11-23 15:19:27 gawen>
+   Time-stamp: <2012-02-26 21:57:36 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -377,6 +377,9 @@ int main(int argc, char *argv[])
     sar_list(f);
     break;
   }
+
+  if(val.mode != MD_NONE)
+    sar_close(f);
 
   exit(EXIT_SUCCESS);
 }

@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2012-02-26 20:44:25 gawen>
+   Time-stamp: <2012-02-26 21:55:55 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -166,7 +166,7 @@ struct sar_file * sar_creat(const char *path,
 void sar_close(struct sar_file *file)
 {
   assert(file);
-  assert(file->fd);
+  assert(file->file);
   assert(!file->wp);
 
   int status = 0;
