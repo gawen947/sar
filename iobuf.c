@@ -37,7 +37,7 @@
 
 #include "iobuf.h"
 
-#define IOBUF_SIZE 65536
+#define IOBUF_SIZE 1024 * 1024
 
 #ifndef MIN
 # define MIN(a, b) ((a) < (b) ? (a) : (b))

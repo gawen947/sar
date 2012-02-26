@@ -39,7 +39,7 @@
 
 #include "sar.h"
 
-#define IO_SIZE   32768
+#define IO_SIZE   1024 * 1024
 #define DNAME_MAX 1024
 #define MIN(x,y) ((x) < (y) ? (x) : (y))
 #define MAX(x,y) ((x) > (y) ? (x) : (y))
