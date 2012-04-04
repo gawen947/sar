@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2012-02-27 00:19:16 gawen>
+   Time-stamp: <2012-04-04 02:16:18 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -116,6 +116,12 @@ static void hl_destroy(void *data)
   free(hl);
 }
 
+static const char * temporary_archive(void)
+{
+  static char template[] = "sarXXXXXX";
+  return mktemp(template);
+}
+
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
 struct sar_file * sar_creat(const char *path,
@@ -124,6 +130,9 @@ struct sar_file * sar_creat(const char *path,
                             bool use_ntime,
                             unsigned int verbose)
 {
+  const char *real_path = path;
+  path = temporary_archive();
+
   uint32_t magik = MAGIK;
   uint32_t s_magik;
 
@@ -172,17 +181,15 @@ struct sar_file * sar_creat(const char *path,
 
   out->file = iobuf_dopen(out->fd);
 
-  /* store the canonicalized absolute pathname */
-  out->out_path = xmalloc(WP_MAX);
-  out->wp_path  = xmalloc(WP_MAX);
-  realpath(path, out->out_path);
-
   /* write magik number and flags
      notice we convert magik to little endian first
      flags which is 1 byte wide is not converted though */
   s_magik = htole32(magik);
   xiobuf_write(out->file, &s_magik, sizeof(s_magik));
   xiobuf_write(out->file, &out->flags, sizeof(out->flags));
+
+  /* now we may move the temporary archive to the real one */
+  rename(path, real_path);
 
   /* for debugging purpose */
   UNPTR(out->wp);
@@ -208,9 +215,6 @@ void sar_close(struct sar_file *file)
 
   if(status)
     errx(EXIT_FAILURE, "failed to compress");
-
-  free(file->out_path);
-  free(file->wp_path);
 }
 
 void sar_add(struct sar_file *out, const char *path)
@@ -677,13 +681,6 @@ static int add_node(struct sar_file *out, mode_t *rmode, const char *name)
   uint16_t mode, s_mode;
   uint8_t s_nsclass;
 
-  /* ensure that this file is not the archive
-     itself, if it is we do not complain
-     and just skip this node */
-  realpath(out->wp, out->wp_path);
-  if(strtest(out->wp_path, out->out_path))
-    return 0;
-
   /* stat the file first to reupdate access time later */
   if(lstat(out->wp, &out->stat) < 0) {
     warn("could not stat \"%s\"", out->wp);
@@ -1034,11 +1031,6 @@ struct sar_file * sar_read(const char *path,
 
   out->file = iobuf_dopen(out->fd);
 
-  /* store the canonicalized absolute pathname */
-  out->out_path = xmalloc(WP_MAX);
-  out->wp_path  = xmalloc(WP_MAX);
-  realpath(path, out->out_path);
-
   /* check magik number */
   xxiobuf_read(out->file, &magik, sizeof(magik));
 
@@ -1237,13 +1229,6 @@ static int rec_extract(struct sar_file *out, size_t idx)
   uint32_t crc;
   uint16_t mode;
   uint8_t size, i;
-
-  /* ensure that this file is not the archive
-     itself, if it is we do not complain
-     and just skip this node */
-  realpath(out->wp, out->wp_path);
-  if(strtest(out->wp_path, out->out_path))
-    return 0;
 
   /* setup crc and fallback variables we don't
      care if we compute it or not */

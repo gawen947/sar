@@ -1,5 +1,5 @@
 /* File: sar.h
-   Time-stamp: <2012-02-26 23:03:47 gawen>
+   Time-stamp: <2012-04-04 02:08:57 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -79,9 +79,6 @@ struct sar_file {
   unsigned int verbose;    /* verbose level */
   bool list_only;          /* do not extract file skip them instead */
 
-
-  char *out_path;          /* canonicalized absolute pathname to the archive */
-  char *wp_path;           /* canonicalized absolute pathname to the wp */
   char *wp;                /* working path */
   size_t wp_sz;            /* working path size */
   size_t wp_idx;           /* working path index */

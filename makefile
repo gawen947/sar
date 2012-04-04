@@ -1,6 +1,6 @@
 include commands.mk
 
-OPTS    := -O2
+OPTS    := -O3
 CFLAGS  := -std=c99 $(OPTS) -fPIC -Wall
 LDFLAGS :=
 

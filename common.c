@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2012-02-26 21:23:46 gawen>
+   Time-stamp: <2012-04-04 01:48:59 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -154,10 +154,8 @@ ssize_t xxiobuf_read(iofile_t file, void *buf, size_t count)
 /* exact comparison between two strings */
 bool strtest(const char *a, const char *b)
 {
-  for(; *a == *b ; a++, b++)
-    if(*a == '\0')
-      return true;
-  return false;
+  /* We save much time by using the builtin version of strcmp */
+  return strcmp(a, b) == 0;
 }
 
 char * strndup(const char *s, size_t n)
