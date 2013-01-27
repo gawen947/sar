@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2012-04-04 02:16:18 gawen>
+   Time-stamp: <2013-01-27 23:28:53 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -1475,11 +1475,11 @@ EXTRACT_NAME:
 #else
       struct timespec times[2];
 
-      times[0].tv_sec  = out->stat.st_atime;
-      times[0].tv_nsec = out->stat.st_atim.tv_nsec;
+      times[0].tv_sec  = atime;
+      times[0].tv_nsec = (long)atime_ns;
 
-      times[1].tv_sec  = out->stat.st_mtime;
-      times[1].tv_nsec = out->stat.st_mtim.tv_nsec;
+      times[1].tv_sec  = mtime;
+      times[1].tv_nsec = (long)mtime_ns;
 
       utimensat(AT_FDCWD, out->wp, times, AT_SYMLINK_NOFOLLOW);
 #endif /* __FreeBSD__ */
