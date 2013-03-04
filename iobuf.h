@@ -35,7 +35,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#define IOBUF_SIZE 65536
+#define IOBUF_SIZE 1024 * 1024
 
 /* TODO: Define OFF_T_MIN and OFF_T_MAX. */
 
