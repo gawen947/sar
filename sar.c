@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2013-01-28 15:57:39 gawen>
+   Time-stamp: <2013-03-04 19:30:57 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -40,6 +40,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <utime.h>
 #include <time.h>
@@ -85,6 +86,37 @@ static void show_file(const struct sar_file *out, const char *path,
                       const char *link, mode_t mode, uint16_t sar_mode,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
                       time_t mtime, uint32_t crc, bool display_crc);
+static void strflargetime(char *s, size_t max, time_t t);
+
+static void strflargetime(char *s, size_t max, time_t t)
+{
+  char c;
+  t -= time(NULL);
+  t /= 365 * 86400;
+
+  if(t < 1000000) {
+    t /= 1000;
+    c  = 'K';
+  } else if(t < 1000000000) {
+    t /= 1000000;
+    c  = 'M';
+  } else if(t < 1000000000000LL) {
+    t /= 1000000000;
+    c  = 'G';
+  } else if(t < 1000000000000000LL) {
+    t /= 1000000000000LL;
+    c  = 'T';
+  } else if(t < 1000000000000000000LL) {
+    t /= 1000000000000000LL;
+    c  = 'P';
+  } else {
+    t /= 1000000000000000000LL;
+    c  = 'E';
+  }
+
+  /* FIXME: lu or llu ? */
+  snprintf(s, max, "%lu %cyr", t, c);
+}
 
 /* Based on Van Jacobson and Knuth integer hash */
 static uint32_t hl_hash(const void *key)
@@ -528,6 +560,7 @@ static void show_file(const struct sar_file *out,
                       uint32_t crc, bool display_crc)
 {
   if(out->verbose >= 2) {
+    struct tm *tm;
     char date[DATE_MAX];
     struct passwd *p_uid;
     struct group  *g_gid;
@@ -646,11 +679,17 @@ static void show_file(const struct sar_file *out,
     printf("% 9ld\t", size);
 
     /* times */
-    if(out->verbose >= 4) {
-      strftime(date, DATE_MAX, DATE_FORMAT, localtime(&atime));
-      printf("%s\t", date);
-    }
-    strftime(date, DATE_MAX, DATE_FORMAT, localtime(&atime));
+    tm = localtime(&atime);
+    if(tm == NULL) {
+      switch(errno) {
+      case EOVERFLOW:
+        strflargetime(date, DATE_MAX, atime);
+        break;
+      default:
+        err(1, "cannot format time");
+      }
+    } else
+      strftime(date, DATE_MAX, DATE_FORMAT,tm);
     printf("%s\t", date);
 
 
