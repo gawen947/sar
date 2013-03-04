@@ -1,5 +1,5 @@
 /* File: common.c
-   Time-stamp: <2012-04-04 01:48:59 gawen>
+   Time-stamp: <2013-03-04 11:23:00 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -190,7 +190,11 @@ int iobuf_skip(iofile_t file, off_t size)
       char dummy[IO_SZ];
       ssize_t n;
 
-      n = xxiobuf_read(file, dummy, MIN(size, IO_SZ));
+      n = iobuf_read(file, dummy, MIN(size, IO_SZ));
+
+      if(n <= 0)
+        err(EXIT_FAILURE, "IO read error or inconsistent archive");
+
 
       size -= n;
     }
