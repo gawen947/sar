@@ -1,5 +1,5 @@
 /* File: sar.c
-   Time-stamp: <2013-03-04 19:30:57 gawen>
+   Time-stamp: <2013-03-05 17:33:29 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
@@ -1150,7 +1150,11 @@ static void read_regular(struct sar_file *out, mode_t mode)
 
 static void read_dir(struct sar_file *out, mode_t mode)
 {
-  if(!out->list_only && mkdir(out->wp, mode) < 0)
+  if(out->list_only)
+    return;
+
+  /* We do not complain when a directory already exists. */
+  if(mkdir(out->wp, mode) < 0 && errno != EEXIST)
     warn("cannot create directory \"%s\"", out->wp);
 }
 
