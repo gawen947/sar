@@ -1,5 +1,4 @@
 /* File: translation.c
-   Time-stamp: <2011-07-15 19:24:22 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.

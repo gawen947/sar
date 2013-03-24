@@ -1,5 +1,4 @@
 /* File: sar.h
-   Time-stamp: <2012-04-04 02:08:57 gawen>
 
    Copyright (c) 2011 David Hauweele <david@hauweele.net>
    All rights reserved.
