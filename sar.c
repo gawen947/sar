@@ -61,6 +61,7 @@
 /* TODO:
    - use *at system calls */
 
+static struct sar_file * create_sar_file(void);
 static void crc_write(struct sar_file *out, const void *buf, size_t count);
 static void xcrc_read(struct sar_file *out, void *buf, size_t count);
 static int add_node(struct sar_file *out, mode_t *mode, const char *name);
@@ -86,6 +87,13 @@ static void show_file(const struct sar_file *out, const char *path,
                       uid_t uid, gid_t gid, off_t size, time_t atime,
                       time_t mtime, uint32_t crc, bool display_crc);
 static void strflargetime(char *s, size_t max, time_t t);
+
+static struct sar_file * create_sar_file(void)
+{
+  struct sar_file *file = xmalloc(sizeof(struct sar_file));
+  memset(file, 0, sizeof(struct sar_file));
+  return file;
+}
 
 static void strflargetime(char *s, size_t max, time_t t)
 {
@@ -167,7 +175,7 @@ struct sar_file * sar_creat(const char *path,
   uint32_t magik = MAGIK;
   uint32_t s_magik;
 
-  struct sar_file *out = xmalloc(sizeof(struct sar_file));
+  struct sar_file *out = create_sar_file();
 
   out->verbose = verbose;
   out->version = MAGIK_VERSION;
@@ -1023,7 +1031,7 @@ struct sar_file * sar_read(const char *path,
 {
   uint32_t magik;
 
-  struct sar_file *out = xmalloc(sizeof(struct sar_file));
+  struct sar_file *out = create_sar_file();
 
   out->verbose = verbose;
 
