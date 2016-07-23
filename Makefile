@@ -1,7 +1,7 @@
 include commands.mk
 
 OPTS    := -O3
-CFLAGS  := -std=c99 $(OPTS) -fvisibility=hidden -fvisibility-inlines-hidden -fPIC -Wall
+CFLAGS  := -std=c99 $(OPTS) -fPIC -Wall
 LDFLAGS :=
 
 SRC  = $(wildcard *.c)
