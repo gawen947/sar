@@ -53,6 +53,7 @@
 #include <endian.h>
 #endif /* __FreeBSD__ */
 
+#include "crc32-legacy.h"
 #include "translation.h"
 #include "common.h"
 #include "crc32.h"
@@ -161,6 +162,20 @@ static const char * temporary_archive(void)
   return mktemp(template);
 }
 
+static uint32_t f_crc_legacy(const unsigned char *s,
+                             unsigned long len,
+                             uint32_t crc)
+{
+  return crc32_legacy(s, crc, len);
+}
+
+static uint32_t f_crc_c(const unsigned char *s,
+                        unsigned long len,
+                        uint32_t crc)
+{
+  return crc32_c(s, len, crc);
+}
+
 /* create a new archive from scratch and doesn't
    bother if it was already created we trunc it */
 struct sar_file * sar_creat(const char *path,
@@ -184,6 +199,10 @@ struct sar_file * sar_creat(const char *path,
     out->flags |= A_ICRC;
   if(use_ntime)
     out->flags |= A_INTIME;
+
+  /* by default archives use the new CRC32-C */
+  out->flags |= A_ICRC32_C;
+  out->f_crc  = f_crc_c;
 
   if(!path)
     out->fd = STDOUT_FILENO;
@@ -331,7 +350,7 @@ CLEAN:
 static void crc_write(struct sar_file *out, const void *buf, size_t count)
 {
   if(A_HAS_CRC(out))
-    out->crc = crc32(buf, out->crc, count);
+    out->crc = out->f_crc(buf, count, out->crc);
   xiobuf_write(out->file, buf, count);
 }
 
@@ -340,7 +359,7 @@ static void xcrc_read(struct sar_file *out, void *buf, size_t count)
   xxiobuf_read(out->file, buf, count);
 
   if(A_HAS_CRC(out))
-    out->crc = crc32(buf, out->crc, count);
+    out->crc = out->f_crc(buf, count, out->crc);
 }
 
 static char * watch_inode(struct sar_file *out)
@@ -1084,6 +1103,11 @@ struct sar_file * sar_read(const char *path,
   if(out->flags & ~A_IMASK)
     errx(EXIT_FAILURE, "unknown flags found (%x)", out->flags);
 
+  if(out->flags & A_ICRC32_C)
+    out->f_crc = f_crc_c;
+  else
+    out->f_crc = f_crc_legacy;
+
   /* for debugging purpose */
   UNPTR(out->wp);
   UNPTR(out->hl_tbl);
@@ -1593,8 +1617,10 @@ void sar_info(struct sar_file *out)
   printf("SAR file:\n"
          "\tVersion          : %d\n"
          "\tHas CRC          : %s\n"
-         "\tHas nano time    : %s\n",
+         "\tHas nano time    : %s\n"
+         "\tHas CRC32-C      : %s\n",
          out->version,
          S_BOOLEAN(A_HAS_CRC(out)),
-         S_BOOLEAN(A_HAS_NTIME(out)));
+         S_BOOLEAN(A_HAS_NTIME(out)),
+         S_BOOLEAN(A_HAS_CRC32_C(out)));
 }

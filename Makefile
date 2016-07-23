@@ -1,7 +1,7 @@
 include commands.mk
 
 OPTS    := -O3
-FLAGS  := -std=c99 $(OPTS) -fvisibility=hidden -fvisibility-inlines-hidden -fPIC -Wall
+CFLAGS  := -std=c99 $(OPTS) -fvisibility=hidden -fvisibility-inlines-hidden -fPIC -Wall
 LDFLAGS :=
 
 SRC  = $(wildcard *.c)
@@ -36,6 +36,18 @@ CFLAGS += -D_BSD_SOURCE=1 -D_POSIX_C_SOURCE=200809L -D_LARGEFILE64_SOURCE=1
 else
 CFLAGS += -D_BSD_SOURCE=1
 endif
+
+CFLAGS += -DUSE_CRC32_C=1
+
+# In FreeBSD systems, sometimes the correct cputype is not picked up.
+# We check the log and enable it when it is available.
+SSE42_SUPPORT=$(shell $(CC) -march=native -dM -E - < /dev/null | grep SSE4_2)
+ifeq ($(SSE42_SUPPORT),)
+  SSE42_SUPPORT=$(shell if [ -f /var/run/dmesg.boot ] ; then grep SSE4\.2 /var/run/dmesg.boot ; fi)
+endif
+ifneq ($(SSE42_SUPPORT),)
+	CFLAGS += -msse4.2
+endif 
 
 .PHONY: all clean
 

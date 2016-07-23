@@ -85,6 +85,9 @@ struct sar_file {
   struct stat stat;        /* current stat information */
   uint8_t nsclass;         /* current node size class */
   uint32_t crc;            /* current crc */
+  uint32_t (*f_crc)(const unsigned char *s,
+                    unsigned long len,
+                    uint32_t crc); /* update crc */
   char *link;              /* symlink or hardlink destination */
   off_t size;              /* size of a node */
 
@@ -141,12 +144,14 @@ enum mctrl { M_C_CHILD  = 0x0, /* end of children */
 #define M_ISCTRL(m) M_IS(m, CTRL)
 
 /* archive flags */
-#define A_ICRC    0x1                 /* use a checksum for each file */
-#define A_INTIME  0x2                 /* use nanosecond timestamp */
-#define A_IMASK   (A_ICRC | A_INTIME) /* flags mask */
+#define A_ICRC     0x1 /* use a checksum for each file */
+#define A_INTIME   0x2 /* use nanosecond timestamp */
+#define A_ICRC32_C 0x4 /* use CRC32-C instead of CRC32-legacy */
+#define A_IMASK   (A_ICRC | A_INTIME | A_ICRC32_C) /* flags mask */
 #define A_HAS(a, t)    ((a->flags) & A_I ## t)
-#define A_HAS_CRC(a)    A_HAS(a, CRC)
-#define A_HAS_NTIME(a)  A_HAS(a, NTIME)
+#define A_HAS_CRC(a)     A_HAS(a, CRC)
+#define A_HAS_NTIME(a)   A_HAS(a, NTIME)
+#define A_HAS_CRC32_C(a) A_HAS(a, CRC32_C)
 
 /* node size class related flags */
 /* file size class flags */
