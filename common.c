@@ -157,13 +157,6 @@ bool strtest(const char *a, const char *b)
   return strcmp(a, b) == 0;
 }
 
-char * strndup(const char *s, size_t n)
-{
-  char *r = xmalloc(n);
-
-  return strncpy(r, s, n);
-}
-
 /* skip 'size' bytes in a file
    return  0 on success,
           -1 on error    */

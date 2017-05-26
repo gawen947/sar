@@ -54,7 +54,6 @@
 
 char * readlink_malloc_n(const char *filename, ssize_t *n);
 size_t n_strncpy(char *dest, const char *src, size_t n);
-char * strndup(const char *s, size_t n);
 bool strtest(const char *a, const char *b);
 int iobuf_skip(iofile_t file, off_t size);
 
