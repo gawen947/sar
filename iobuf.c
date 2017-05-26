@@ -22,7 +22,9 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define _POSIX_C_SOURCE 200112L
+#ifndef _POSIX_C_SOURCE
+# define _POSIX_C_SOURCE 200112L
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
