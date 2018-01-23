@@ -38,8 +38,9 @@
 #include <errno.h>
 #include <err.h>
 
+#include <gawen/iobuf.h>
+
 #include "sar.h"
-#include "iobuf.h"
 #include "common.h"
 
 #define SAFE_CALL0(name, erron, msg, ret)       \

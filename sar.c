@@ -53,10 +53,11 @@
 #include <endian.h>
 #endif /* __FreeBSD__ */
 
+#include <gawen/crc32.h>
+
 #include "crc32-legacy.h"
 #include "translation.h"
 #include "common.h"
-#include "crc32.h"
 #include "sar.h"
 
 /* TODO:

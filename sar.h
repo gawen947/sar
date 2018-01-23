@@ -34,8 +34,8 @@
 #include <stdbool.h>
 #include <limits.h>
 
-#include "htable.h"
-#include "iobuf.h"
+#include <gawen/htable.h>
+#include <gawen/iobuf.h>
 
 #ifdef HAVE_CONFIG
 #include "config.h"

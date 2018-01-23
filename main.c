@@ -38,6 +38,8 @@
 #include <time.h>
 #include <err.h>
 
+#include <gawen/help.h>
+
 #include "sar.h"
 #include "common.h"
 
@@ -46,12 +48,6 @@ enum mode { MD_NONE = 0,
             MD_CREATE,
             MD_EXTRACT,
             MD_LIST };
-
-struct opts_name {
-  char name_short;
-  const char *name_long;
-  const char *help;
-};
 
 struct opts_val {
   unsigned int verbose;
@@ -83,36 +79,6 @@ static void version()
 {
   printf(PACKAGE " " PACKAGE_VERSION "\n");
   exit(EXIT_SUCCESS);
-}
-
-static void help(const struct opts_name *names, const char *prog_name)
-{
-  const struct opts_name *opt;
-  int size;
-  int max = 0;
-
-  fprintf(stderr, "Usage: %s [OPTIONS] [ARCHIVE] [FILES]\n", prog_name);
-
-  /* maximum option name size for padding */
-  for(opt = names ; opt->name_long ; opt++) {
-    size = strlen(opt->name_long);
-    if(size > max)
-      max = size;
-  }
-
-  /* print options and help messages */
-  for(opt = names ; opt->name_long ; opt++) {
-    if(opt->name_short != 0)
-      fprintf(stderr, "  -%c, --%s", opt->name_short, opt->name_long);
-    else
-      fprintf(stderr, "      --%s", opt->name_long);
-
-    /* padding */
-    size = strlen(opt->name_long);
-    for(; size <= max ; size++)
-      fputc(' ', stderr);
-    fprintf(stderr, "%s\n", opt->help);
-  }
 }
 
 static void except_archive(int argc, int optind, char *argv[],
@@ -172,7 +138,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
              OPT_NO_CRC      = 'C',
              OPT_NO_NANO     = 'N' };
 
-  struct opts_name names[] = {
+  struct opt_help names[] = {
     { 'V', "version",     "Print version information" },
 #ifdef COMMIT
     { 0  , "commit",      "Display commit information" },
@@ -300,7 +266,7 @@ static void cmdline(int argc, char *argv[], struct opts_val *val)
     case OPT_HELP:
       exit_status = EXIT_SUCCESS;
     default:
-      help(names, pgn);
+      help(pgn, "[options] [archive] [files]", names);
       exit(exit_status);
     }
   }
