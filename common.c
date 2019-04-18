@@ -164,10 +164,10 @@ bool strtest(const char *a, const char *b)
 int iobuf_skip(iofile_t file, off_t size)
 {
   /* first we try the usual way with lseek */
-#ifdef __FreeBSD__
-  if(iobuf_lseek(file, size, SEEK_CUR) >= 0)
-#else
+#ifdef __linux__
   if(iobuf_lseek64(file, size, SEEK_CUR) >= 0)
+#else
+  if(iobuf_lseek(file, size, SEEK_CUR) >= 0)
 #endif /* __FreeBSD__ */
     return 0;
 
