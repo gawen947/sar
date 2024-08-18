@@ -1,8 +1,8 @@
 include commands.mk
 
 OPTS    := -O3
-CFLAGS  := -std=c99 $(OPTS) -fPIC -Wall
-LDFLAGS := -lgawen
+CFLAGS  += -std=c99 $(OPTS) -fPIC -Wall
+LDFLAGS += -lgawen
 
 SRC  = $(wildcard *.c)
 OBJ  = $(foreach obj, $(SRC:.c=.o), $(notdir $(obj)))
